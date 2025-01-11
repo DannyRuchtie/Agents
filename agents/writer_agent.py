@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 from datetime import datetime
+import re
 from typing import Optional
 
 from .base_agent import BaseAgent
@@ -9,7 +10,7 @@ from .base_agent import BaseAgent
 WRITER_SYSTEM_PROMPT = """You are a skilled writer. Your role is to:
 1. Compose clear, engaging, and well-structured text
 2. Adapt your writing style based on the request
-3. Create documents in markdown format when asked
+3. Create documents in markdown format when asked, always starting with a # Title
 4. When asked to write in Dieter Bohn's style (The Verge):
    - Use a conversational yet authoritative tone
    - Include witty observations and clever analogies
@@ -46,7 +47,7 @@ class WriterAgent(BaseAgent):
         # Prepare the prompt
         prompt = (
             "Write a response to this request. If '@Desktop' is included, format the response "
-            "in clean markdown.\n\n"
+            "in clean markdown, starting with a # Title that summarizes the content.\n\n"
         )
         if context:
             prompt += f"Context:\n{context}\n\n"
@@ -72,12 +73,21 @@ class WriterAgent(BaseAgent):
         # Use exact desktop path
         desktop_path = "/Users/danny/Desktop"
         
-        # Create a filename based on the first few words of the query
-        # Remove @Desktop and clean up the query
-        clean_query = query.replace("@Desktop", "").strip()
-        words = clean_query.split()[:5]  # Take first 5 words
-        filename = "_".join(words).lower()  # Join with underscores
-        filename = "".join(c if c.isalnum() or c == "_" else "" for c in filename)  # Remove special chars
+        # Try to extract title from the content (looking for # Title format)
+        title_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+        if title_match:
+            # Use the title as filename
+            filename = title_match.group(1).strip()
+            # Clean up the filename
+            filename = "".join(c if c.isalnum() or c == "_" else "_" for c in filename.lower())
+            filename = re.sub(r'_+', '_', filename)  # Replace multiple underscores with single
+            filename = filename.strip('_')  # Remove leading/trailing underscores
+        else:
+            # Fallback to using the query if no title found
+            clean_query = query.replace("@Desktop", "").strip()
+            words = clean_query.split()[:5]  # Take first 5 words
+            filename = "_".join(words).lower()  # Join with underscores
+            filename = "".join(c if c.isalnum() or c == "_" else "" for c in filename)
         
         # Add timestamp and extension
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
