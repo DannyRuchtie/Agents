@@ -1,6 +1,8 @@
 """Main module for the multi-agent chat interface."""
 import asyncio
 import os
+import json
+from pathlib import Path
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
@@ -9,6 +11,25 @@ from agents.writer_agent import WriterAgent
 from agents.search_agent import SearchAgent
 from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
+
+# Load environment variables from .env file as fallback
+load_dotenv()
+
+def get_api_key() -> str:
+    """Get the OpenAI API key from memory.json or environment."""
+    memory_file = Path("memory.json")
+    if memory_file.exists():
+        try:
+            with open(memory_file, 'r') as f:
+                memories = json.load(f)
+                if api_key := memories.get("config", {}).get("api_keys", {}).get("openai"):
+                    return api_key
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return os.getenv("OPENAI_API_KEY", "")
+
+# Set up OpenAI API key
+os.environ["OPENAI_API_KEY"] = get_api_key()
 
 MASTER_SYSTEM_PROMPT = """You are the coordinator of a team of AI agents. Your role is to:
 1. Analyze user requests and determine which specialist agent(s) to use
@@ -34,8 +55,17 @@ class MasterAgent(BaseAgent):
         self.code_agent = CodeAgent()
     
     async def _check_memory(self, query: str) -> List[str]:
-        """Check if we have relevant information in memory."""
-        return await self.memory_agent.retrieve(query)
+        """Check memory for relevant information."""
+        # Store family information if detected
+        if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children"]):
+            await self.memory_agent.store("contacts", query, "family")
+            
+        # For queries about family members, retrieve from contacts/family
+        if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children", "family"]):
+            return await self.memory_agent.retrieve("contacts", query, "family")
+            
+        # For other queries, try general retrieval
+        return await self.memory_agent.retrieve("interactions", query)
     
     async def _perform_search(self, query: str) -> List[str]:
         """Perform web search with error handling."""
@@ -51,8 +81,17 @@ class MasterAgent(BaseAgent):
             return []
     
     async def process_request(self, query: str) -> str:
-        """Process a user request using the appropriate agents."""
+        """Process a user request using appropriate agents."""
         print("\n🤔 Processing your request...")
+        
+        # First check memory for context
+        print("📚 Checking memory for relevant information...")
+        memories = await self._check_memory(query)
+        
+        if memories:
+            context = "Previous relevant information:\n" + "\n".join(memories)
+        else:
+            context = ""
         
         # Check if this is a desktop save request
         should_save_to_desktop = any(phrase in query.lower() for phrase in [
@@ -141,9 +180,6 @@ class MasterAgent(BaseAgent):
 
 async def chat_interface():
     """Interactive chat interface for the master agent."""
-    # Set up OpenAI API key
-    os.environ["OPENAI_API_KEY"] = "OPENAI_API_KEY_PLACEHOLDER"
-    
     # Initialize master agent
     print("\n🤖 Initializing AI Agents...")
     master = MasterAgent()
