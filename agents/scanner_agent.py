@@ -44,30 +44,35 @@ class ScannerAgent(BaseAgent):
         self.docs_dir.mkdir(exist_ok=True)
         
         # Initialize vector store with basic configuration
-        self.embeddings = OpenAIEmbeddings(
-            model="text-embedding-3-small",
-            dimensions=1536
-        )
-        self.vectorstore = Chroma(
-            persist_directory="vectorstore",
-            embedding_function=self.embeddings
-        )
-        
-        # Initialize file watcher
-        self.observer = Observer()
-        self.observer.schedule(
-            DocumentChangeHandler(self),
-            str(self.docs_dir),
-            recursive=False
-        )
-        self.observer.start()
-        
-        # Document tracking
-        self.document_map: Dict[str, str] = {}  # path -> hash
+        try:
+            self.embeddings = OpenAIEmbeddings()  # Using default configuration
+            self.vectorstore = Chroma(
+                persist_directory="vectorstore",
+                embedding_function=self.embeddings
+            )
+            
+            # Initialize file watcher
+            self.observer = Observer()
+            self.observer.schedule(
+                DocumentChangeHandler(self),
+                str(self.docs_dir),
+                recursive=False
+            )
+            self.observer.start()
+            
+            # Document tracking
+            self.document_map: Dict[str, str] = {}  # path -> hash
+        except Exception as e:
+            print(f"Error initializing ScannerAgent: {str(e)}")
+            self.observer = None  # Ensure observer is defined even if initialization fails
         
     def __del__(self):
-        self.observer.stop()
-        self.observer.join()
+        try:
+            if hasattr(self, 'observer') and self.observer:
+                self.observer.stop()
+                self.observer.join()
+        except Exception as e:
+            print(f"Error cleaning up ScannerAgent: {str(e)}")
         
     def _compute_file_hash(self, file_path: str) -> str:
         """Compute SHA-256 hash of file contents."""
