@@ -1,244 +1,172 @@
 # 🤖 Multi-Agent AI Assistant
 
-A sophisticated multi-agent system that combines specialized AI agents to handle various tasks efficiently. The system uses LangChain and OpenAI's latest models to provide a powerful, context-aware assistant experience.
+An advanced AI assistant that combines multiple specialized agents to enhance your daily workflow. Built with OpenAI's latest models and running natively on macOS, this assistant can help you with everything from writing and research to code generation and local system interactions.
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                     Master Agent 🎮                           │
-│                     (Orchestrator)                            │
-└───────┬──────┬──────┬──────┬──────┬──────┬──────┬───────────┘
-        │      │      │      │      │      │      │
-    ┌───▼──┐ ┌─▼───┐ ┌▼───┐ ┌▼───┐ ┌▼────┐ ┌▼────┐ ┌▼────┐
-    │Memory│ │Search│ │Code│ │Write│ │Scan │ │Vision│ │📍Loc│
-    │ 📚   │ │ 🔍   │ │ 💻 │ │ ✍️  │ │ 📄  │ │ 🖼️   │ │🌤️   │
-    └──────┘ └──────┘ └────┘ └────┘ └─────┘ └─────┘ └─────┘
-```
+## ✨ Key Features
 
-## ✨ Features
+### 🎙️ Voice Interaction
+- Natural text-to-speech using OpenAI's voices (alloy, echo, fable, onyx, nova, shimmer)
+- Smart voice mode detection - automatically recognizes when you want spoken responses
+- Easy voice commands like "speak to me" or "read this aloud"
 
-- 🤖 **Specialized Agents**
-  - 🔍 Search Agent: Web research and information gathering
-  - ✍️ Writer Agent: Text composition and document creation
-  - 💻 Code Agent: Code generation and technical solutions
-  - 📚 Memory Agent: Context retention and information recall
-  - 📄 Scanner Agent: Document vectorization and semantic search
-  - 🖼️ Vision Agent: Image analysis and screen capture
-  - 📍 Location Agent: Location and weather information
+### 📍 Location & Environment
+- Real-time weather updates and location-aware responses
+- Local system integration with macOS features
+- Screen capture and image analysis capabilities
 
-- 📊 **Document Management**
-  - Automatic document processing and vectorization
-  - Real-time monitoring of document changes
-  - Semantic search across document contents
-  - Intelligent document organization and retrieval
-  - Automatic cleanup of deleted documents
+### 💡 Intelligent Assistance
+- Web search and information retrieval
+- Code generation and technical assistance
+- Document scanning and analysis
+- Memory storage for personal and contextual information
 
-- 🧠 **Memory Management**
-  - Personal information storage
-  - Conversation history tracking
-  - Context-aware responses
-  - Long-term information retention
+### 🔄 Natural Interaction
+- Context-aware responses that remember previous conversations
+- Seamless switching between text and voice modes
+- Proactive suggestions based on context
 
-- 📝 **File Management**
-  - Markdown document creation
-  - Desktop file saving
-  - Automatic file organization
-  - Document backup and tracking
+## 🚀 Getting Started
 
-### 1. 🤖 Specialized Agents
-- **📚 Memory Agent**: Stores and retrieves information with categorized memory management
-  - 👤 Personal information
-  - 👥 Family contacts
-  - 📋 Project details
-  - ⚙️ User preferences
-  - 📄 Document history
-  
-- **🔍 Search Agent**: Performs web searches to gather relevant information
-  - 🌐 Real-time information retrieval
-  - 🎯 Context-aware searching
-  - 🛡️ Error handling and fallback mechanisms
+### 1. **Prerequisites**
+- Python 3.11 or higher
+- macOS system
+- OpenAI API key
 
-- **✍️ Writer Agent**: Handles text composition and document creation
-  - 📝 Blog post generation
-  - 📋 Document summarization
-  - 📘 Markdown file creation
-  - 💾 Desktop file saving (@Desktop tag)
-  - 🎨 Custom writing styles
-
-- **💻 Code Agent**: Manages code-related tasks
-  - ⌨️ Code generation
-  - 📖 Code explanation
-  - ✅ Best practices implementation
-
-- **📄 Scanner Agent**: Manages document vectorization and storage
-  - 📑 Document scanning and indexing
-  - 🔍 Vector database management
-  - 📂 Document backup and tracking
-  - 🗑️ Automatic cleanup on deletion
-  - 🔄 Real-time synchronization
-
-- **🖼️ Vision Agent**: Analyzes images and screen content
-  - 📸 Screen capture functionality
-  - 🔍 OCR text extraction
-  - 📊 Image content analysis
-  - 🗂️ Image organization
-  - 💾 Automatic saving and indexing
-
-- **📍 Location Agent**: Provides location and weather information
-  - 🌍 IP-based location detection
-  - 🌤️ Real-time weather conditions
-  - 🌡️ Temperature and humidity data
-  - 💨 Wind speed and conditions
-  - 🌧️ Precipitation forecasts
-
-### 2. 🧠 Memory Management
-The system maintains a structured memory system with categories:
-```
-Memory Structure
-├── 👤 Personal
-│   └── Names, preferences, dates
-├── 👥 Contacts
-│   ├── Family
-│   ├── Friends
-│   └── Colleagues
-├── 📋 Projects
-│   ├── Current
-│   └── Past
-├── 📚 Knowledge
-│   ├── Technical
-│   ├── Interests
-│   └── Learning
-└── ⚙️ System
-    ├── Config
-    └── History
-```
-
-### 3. 📂 File Management
-- 💾 Automatic desktop file saving with @Desktop tag
-- 📝 Markdown file formatting
-- 🕒 Timestamp-based file naming
-- 🛡️ Safe file handling
-
-## 🚀 Setup
-
-1. **🏗️ Create Virtual Environment**
+### 2. **Installation**
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+# Clone the repository
+git clone [repository-url]
+cd [repository-name]
 
-2. **📦 Install Dependencies**
-```bash
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-3. **🔑 Configure OpenAI API**
-
-⚠️ **Security Note**: Never commit your API key to version control!
-
-Create a `.env` file in the project root (this file is git-ignored):
+### 3. **Configuration**
+Create a `.env` file in the project root:
 ```bash
-# Create .env file
-touch .env
-
-# Add your API key (replace with your actual key)
-echo "OPENAI_API_KEY=your-api-key-here" >> .env
+OPENAI_API_KEY=your-api-key-here
 ```
 
-Or set it as an environment variable:
+## 💫 Usage Examples
+
+### Voice Interaction
 ```bash
-# Linux/MacOS
-export OPENAI_API_KEY=your-api-key-here
+# Turn voice mode on (any of these patterns work)
+> start speaking
+> start voice
+> enable speech
+> enable voice
+> turn on speech
+> turn on voice
+> voice on
+> speech on
 
-# Windows (Command Prompt)
-set OPENAI_API_KEY=your-api-key-here
+# Change voice
+> set voice alloy    # Choose from: alloy, echo, fable, onyx, nova, shimmer
+> change to echo
+> use nova voice
+> switch to shimmer
 
-# Windows (PowerShell)
-$env:OPENAI_API_KEY="your-api-key-here"
+# Turn voice mode off
+> stop speaking
+> stop voice
+> disable speech
+> disable voice
+> turn off speech
+> turn off voice
+> voice off
+> speech off
+
+# Toggle auto-play
+> toggle autoplay
+> toggle auto-play
+> toggle voice
+
+# Direct speech
+> say [your text]
+> speak [your text]
+> tell me [your text]
+
+Note: The system is designed to be flexible and understand variations of these commands,
+including common typos (e.g., "stat speaking" will be recognized as "start speaking").
 ```
 
-## 📖 Usage
-
-### 🏃‍♂️ Running the Application
+### Information & Search
 ```bash
-python main.py
+# Get weather information
+> what's the weather like?
+> do I need an umbrella today?
+
+# Web search
+> search for recent AI developments
+> find information about [topic]
 ```
 
-### 🎮 Basic Commands
-```
-┌────────────────────────────────────────┐
-│ 💬 Type your query naturally           │
-│ 🚪 'exit' to end session               │
-│ 💾 '@Desktop' to save files            │
-│ 📄 'scan' to process documents         │
-│ 📸 'screenshot' to capture screen      │
-│ 🖼️ 'analyze' to examine images         │
-│ 📍 'weather' for local conditions      │
-└────────────────────────────────────────┘
+### Memory & Personal Info
+```bash
+# Store information
+> remember that my name is [Name]
+> my daughter's name is [Name]
+
+# Retrieve information
+> what do you remember about my family?
+> recall our previous conversation about [topic]
 ```
 
-### 💡 Example Queries
-
-1. **👥 Information Storage**
-   ```
-   "Remember that my name is [Name]"
-   "My daughter's name is [Name]"
-   ```
-
-2. **📝 Document Creation**
-   ```
-   "Write a blog post about [topic] @Desktop"
-   "Create a summary of [topic] and save it to my desktop"
-   ```
-
-3. **🔍 Information Retrieval**
-   ```
-   "What are the names of my children?"
-   "Tell me about my family members"
-   ```
-
-4. **💻 Code Generation**
-   ```
-   "Write a Python function to [task]"
-   "Create a JavaScript class for [purpose]"
-   ```
-
-5. **📄 Document Management**
-   ```
-   "Scan this document for later reference"
-   "Find documents similar to [description]"
-   ```
-
-6. **🖼️ Image Analysis**
-   ```
-   "analyze 'path/to/image.jpg' what do you see"
-   "screenshot and describe what's on my screen"
-   ```
-
-7. **📍 Location & Weather**
-   ```
-   "What's the weather like?"
-   "Do I need an umbrella today?"
-   "What's the temperature right now?"
-   ```
-
-## 📁 Project Structure
+### Document & Image Analysis
+```bash
+# Process documents
+> scan this document
+> analyze this image
+> take a screenshot and describe what you see
 ```
-Project Root 📂
-├── 🎮 main.py              # Main application
-├── 🤖 agents/              # Agent modules
-│   ├── 🔧 base_agent.py    # Base class
-│   ├── 📚 memory_agent.py  # Memory management
-│   ├── ✍️  writer_agent.py  # Text composition
-│   ├── 🔍 search_agent.py  # Web searching
-│   ├── 💻 code_agent.py    # Code generation
-│   ├── 📄 scanner_agent.py # Document scanning
-│   ├── 🖼️ vision_agent.py  # Image analysis
-│   └── 📍 location_agent.py # Location & weather
-├── 📂 documents/           # Managed documents
-├── 📊 vectorstore/         # Vector database
-├── 📸 screenshots/         # Captured screens
-├── 🖼️ shared_images/       # Analyzed images
-├── 🧠 memory.json          # Memory storage
-├── 📦 requirements.txt     # Dependencies
-└── 🔑 .env                 # Environment vars
+
+### Code Assistance
+```bash
+# Generate or explain code
+> write a Python function to [task]
+> explain how this code works
+> help me debug this error
 ```
+
+## 🎯 Use Cases
+
+1. **Personal Assistant**
+   - Schedule management and reminders
+   - Weather updates and local information
+   - Personal and family information management
+
+2. **Development Helper**
+   - Code generation and debugging
+   - Technical documentation
+   - Development workflow automation
+
+3. **Research Assistant**
+   - Web search and information gathering
+   - Document analysis and summarization
+   - Content creation and writing assistance
+
+4. **System Interface**
+   - Voice-controlled system interactions
+   - Screen capture and analysis
+   - Document management and processing
+
+## 🔒 Security Note
+
+- Never share your API keys
+- Be cautious with personal information
+- Review generated code before execution
+- Keep your dependencies updated
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests, report bugs, or suggest new features.
+
+## 📝 License
+
+[Your chosen license]
