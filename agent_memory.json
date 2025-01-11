@@ -1,0 +1,10 @@
+{
+  "general": [
+    "The system was initialized with basic agent capabilities",
+    "The system includes search, writing, code, and memory functions"
+  ],
+  "technical": [
+    "The system uses LangChain v0.3 for agent coordination",
+    "OpenAI's latest models are used for language processing"
+  ]
+}
