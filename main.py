@@ -14,6 +14,7 @@ from agents.base_agent import BaseAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
+from agents.speech_agent import SpeechAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,12 +32,29 @@ def get_api_key() -> str:
 # Set up OpenAI API key from environment
 os.environ["OPENAI_API_KEY"] = get_api_key()
 
-MASTER_SYSTEM_PROMPT = """You are the coordinator of a team of AI agents. Your role is to:
+MASTER_SYSTEM_PROMPT = """You are the coordinator of a team of AI agents running on a macOS system. Your role is to:
 1. Analyze user requests and determine which specialist agent(s) to use
 2. Break down complex tasks into subtasks for different agents
 3. Synthesize responses from multiple agents into coherent answers
 4. Maintain context and guide the conversation flow
-Focus on efficient task delegation and clear communication."""
+
+You have access to the following capabilities:
+- Voice synthesis using OpenAI's TTS (text-to-speech) with multiple voices
+- Location and weather information for the user's current location
+- Screen capture and image analysis
+- Web search and information retrieval
+- Memory storage for personal and family information
+- Document scanning and processing
+- Code generation and analysis
+
+When responding:
+- Be aware that you're running on macOS and can access system features
+- Recognize when voice responses are appropriate vs text-only
+- Understand context about the user's location and environment
+- Maintain a natural conversation flow while leveraging available tools
+- Be proactive in suggesting relevant capabilities (e.g., offering weather info when discussing outdoor activities)
+
+Focus on providing helpful, contextual responses using all available tools."""
 
 
 class MasterAgent(BaseAgent):
@@ -56,6 +74,42 @@ class MasterAgent(BaseAgent):
         self.scanner_agent = ScannerAgent()
         self.vision_agent = VisionAgent()
         self.location_agent = LocationAgent()
+        self.speech_agent = SpeechAgent()
+        
+        # Environment and state flags
+        self.speech_mode = False
+        self.os_type = "macos"  # Running on macOS
+        self.has_location_access = True
+        self.has_screen_access = True
+        
+    def _detect_speech_intent(self, query: str) -> bool:
+        """Detect if the user's query implies they want a voice response."""
+        query_lower = query.lower().strip()
+        
+        # Direct speech indicators
+        speech_indicators = [
+            "speak", "say", "tell me", "talk",
+            "voice", "read", "pronounce", "out loud"
+        ]
+        
+        # Context-based indicators
+        context_indicators = [
+            "how does it sound",
+            "what does it sound like",
+            "can you say",
+            "i want to hear",
+            "let me hear"
+        ]
+        
+        # Check for direct speech indicators
+        if any(indicator in query_lower for indicator in speech_indicators):
+            return True
+            
+        # Check for context-based indicators
+        if any(indicator in query_lower for indicator in context_indicators):
+            return True
+            
+        return False
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
@@ -133,70 +187,124 @@ class MasterAgent(BaseAgent):
     
     async def process(self, query: str, image_path: Optional[str] = None) -> str:
         """Process a user query and coordinate agent responses."""
+        query_lower = query.lower().strip()
+        
+        # Handle explicit speech mode commands
+        speech_on_commands = [
+            "enable speech", "speak mode on", "start speaking",
+            "turn on speech", "speech on", "voice on",
+            "start voice", "enable voice", "speak to me"
+        ]
+        
+        speech_off_commands = [
+            "disable speech", "speak mode off", "stop speaking",
+            "turn off speech", "speech off", "voice off",
+            "stop voice", "disable voice", "stop talking",
+            "be quiet", "quiet mode", "mute"
+        ]
+        
+        # Check for explicit mode changes
+        if any(cmd in query_lower for cmd in speech_on_commands):
+            self.speech_mode = True
+            return "🎙️ Speech mode enabled. I will now speak my responses."
+            
+        if any(cmd in query_lower for cmd in speech_off_commands):
+            self.speech_mode = False
+            return "🔇 Speech mode disabled. I'll respond with text only."
+        
+        # Voice selection with more natural language
+        if "voice" in query_lower and any(word in query_lower for word in ["change", "switch", "use", "set"]):
+            for voice in ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]:
+                if voice in query_lower:
+                    return self.speech_agent.set_voice(voice)
+            return "Please specify which voice to use: alloy, echo, fable, onyx, nova, or shimmer."
+        
+        # Handle auto-play toggle
+        if query_lower in ["toggle autoplay", "toggle auto-play", "toggle voice"]:
+            return self.speech_agent.toggle_autoplay()
+        
+        # Check for speech intent in the query
+        if not self.speech_mode and self._detect_speech_intent(query):
+            self.speech_mode = True
+            print("🎙️ Detected speech intent, enabling voice response...")
+        
         print("\n🤔 Processing your request...")
         
-        # If an image path is provided, use vision agent to analyze it
+        # Process the query with appropriate agents
         if image_path:
             print("🔍 Analyzing provided image...")
-            return await self.vision_agent.analyze_image(image_path, query)
+            response = await self.vision_agent.analyze_image(image_path, query)
+        else:
+            # For other requests, determine which agents to use
+            selected_agents = self._select_agents(query)
             
-        # For other requests, determine which agents to use
-        selected_agents = self._select_agents(query)
-        
-        # Check if this is a screenshot request
-        if "vision" in selected_agents and "screenshot" in query.lower():
-            print("📸 Capturing and analyzing screen content...")
-            return await self.vision_agent.process_screen_content(query)
+            # Check if this is a screenshot request
+            if "vision" in selected_agents and "screenshot" in query.lower():
+                print("📸 Capturing and analyzing screen content...")
+                response = await self.vision_agent.process_screen_content(query)
+                
+            # Check if this is a location/weather request
+            elif "location" in selected_agents:
+                print("📍 Getting location and weather information...")
+                response = await self.location_agent.process(query)
             
-        # Check if this is a location/weather request
-        if "location" in selected_agents:
-            print("📍 Getting location and weather information...")
-            return await self.location_agent.process(query)
+            else:
+                # Process with other agents
+                response_parts = []
+                
+                # Memory check
+                if "memory" in selected_agents:
+                    print("📚 Checking memory for relevant information...")
+                    memories = await self._check_memory(query)
+                    if memories:
+                        response_parts.append("📚 From memory:\n" + "\n".join(memories))
+                
+                # Search
+                if "search" in selected_agents:
+                    print("🌐 Searching the web for information...")
+                    search_results = await self._perform_search(query)
+                    if search_results:
+                        response_parts.append("🌐 Search results:\n" + "\n".join(search_results))
+                
+                # Code generation
+                if "code" in selected_agents:
+                    print("💻 Preparing to generate code...")
+                    code_response = await self.code_agent.generate_code(query)
+                    if code_response:
+                        response_parts.append("💻 Code:\n" + code_response)
+                
+                # Document scanning
+                if "scanner" in selected_agents:
+                    print("📄 Processing documents...")
+                    scan_response = await self.scanner_agent.process_documents(query)
+                    if scan_response:
+                        response_parts.append("📄 Document analysis:\n" + scan_response)
+                
+                # Writer agent or base processing
+                if "writer" in selected_agents:
+                    print("✍️ Composing response...")
+                    context = "\n\n".join(response_parts) if response_parts else ""
+                    writer_response = await self.writer_agent.expand(query, context)
+                    if writer_response:
+                        response_parts.append(writer_response)
+                elif not response_parts:  # If no other responses, use base processing
+                    base_response = await super().process(query)
+                    response_parts.append(base_response)
+                
+                # Combine all responses
+                response = "\n\n".join(response_parts)
         
-        # Process with other agents
-        response_parts = []
-        
-        # Memory check
-        if "memory" in selected_agents:
-            print("📚 Checking memory for relevant information...")
-            memories = await self._check_memory(query)
-            if memories:
-                response_parts.append("📚 From memory:\n" + "\n".join(memories))
-        
-        # Search
-        if "search" in selected_agents:
-            print("🌐 Searching the web for information...")
-            search_results = await self._perform_search(query)
-            if search_results:
-                response_parts.append("🌐 Search results:\n" + "\n".join(search_results))
-        
-        # Code generation
-        if "code" in selected_agents:
-            print("💻 Preparing to generate code...")
-            code_response = await self.code_agent.generate_code(query)
-            if code_response:
-                response_parts.append("💻 Code:\n" + code_response)
-        
-        # Document scanning
-        if "scanner" in selected_agents:
-            print("📄 Processing documents...")
-            scan_response = await self.scanner_agent.process_documents(query)
-            if scan_response:
-                response_parts.append("📄 Document analysis:\n" + scan_response)
-        
-        # Writer agent or base processing
-        if "writer" in selected_agents:
-            print("✍️ Composing response...")
-            context = "\n\n".join(response_parts) if response_parts else ""
-            writer_response = await self.writer_agent.expand(query, context)
-            if writer_response:
-                response_parts.append(writer_response)
-        elif not response_parts:  # If no other responses, use base processing
-            base_response = await super().process(query)
-            response_parts.append(base_response)
-        
-        # Combine all responses
-        return "\n\n".join(response_parts)
+        # Convert to speech if speech mode is enabled or speech intent was detected
+        if self.speech_mode:
+            print("🎙️ Converting response to speech...")
+            await self.speech_agent.text_to_speech(response)
+            
+            # If speech was auto-enabled due to intent, disable it after response
+            if self._detect_speech_intent(query):
+                self.speech_mode = False
+                response += "\n\n(Voice response provided, returning to text mode)"
+                
+        return response
 
 
 async def chat_interface():
@@ -213,6 +321,15 @@ async def chat_interface():
     print("  📄 Scanner Agent - Manages document vectorization and search")
     print("  🖼️  Vision Agent - Analyzes images and screen content")
     print("  📍 Location Agent - Provides location and weather information")
+    print("  🎙️  Speech Agent - Converts responses to speech")
+    
+    print("\nSpeech Commands:")
+    print("  🎙️ Turn on: 'speak to me', 'voice on', 'start speaking', etc.")
+    print("  🔇 Turn off: 'stop talking', 'voice off', 'be quiet', etc.")
+    print("  🗣️ Change voice: 'use echo voice', 'change to nova', etc.")
+    print("  💬 Direct speech: 'say hello', 'speak this', 'tell me something'")
+    print("  ⚙️ Settings: 'toggle voice' - Turn auto-play on/off")
+    print("\nAvailable voices: alloy, echo, fable, onyx, nova, shimmer")
     
     print("\nTo analyze an image, use: analyze <path_to_image> [optional question]")
     print("To take a screenshot, use: screenshot [optional question]")
