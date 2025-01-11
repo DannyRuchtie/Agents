@@ -4,6 +4,7 @@ import base64
 from typing import Dict, Any, List, Union
 
 from openai import OpenAI
+from openai._base_client import SyncHttpxClientWrapper
 
 # OpenAI client singleton
 _client = None
@@ -15,7 +16,10 @@ def get_client() -> OpenAI:
         api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise ValueError("OPENAI_API_KEY environment variable is not set")
-        _client = OpenAI()  # It will automatically use OPENAI_API_KEY from environment
+        _client = OpenAI(
+            api_key=api_key,
+            http_client=SyncHttpxClientWrapper()
+        )
     return _client
 
 def encode_image(image_path: str) -> str:
@@ -55,36 +59,28 @@ def create_image_message(text: str, image_paths: Union[str, List[str]], detail: 
 DEFAULT_MODEL = "gpt-4o-mini"  # Updated to use the mini vision model
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "seed": 42,  # For reproducibility
-    "response_format": {"type": "text"},  # Ensure text responses
-    "stream": False,  # Default to non-streaming
+    "model": DEFAULT_MODEL,
     "max_tokens": 4096,  # Standard context window
 }
 
 # Agent-specific configurations
 AGENT_CONFIGS = {
     "master": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.3,  # Balanced decision-making
     },
     "memory": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.2,  # Consistent memory retrieval
     },
     "search": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.2,  # Precise search terms
     },
     "writer": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.4,  # Balanced creativity and consistency
     },
     "code": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.1,  # Very precise code generation
-    },``
+    },
     "vision": {
-        "model": DEFAULT_MODEL,
         "temperature": 0.2,  # Precise image analysis
         "max_tokens": 300,  # Shorter responses for image analysis
     }
@@ -99,6 +95,6 @@ def get_agent_config(agent_type: str) -> Dict[str, Any]:
     Returns:
         Configuration dictionary for the agent
     """
-    config = AGENT_CONFIGS.get(agent_type, {}).copy()
-    config.update(DEFAULT_SETTINGS)
+    config = DEFAULT_SETTINGS.copy()
+    config.update(AGENT_CONFIGS.get(agent_type, {}))
     return config
