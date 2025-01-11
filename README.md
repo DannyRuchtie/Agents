@@ -3,18 +3,45 @@
 A sophisticated multi-agent system that combines specialized AI agents to handle various tasks efficiently. The system uses LangChain v0.3 and OpenAI's latest models to provide a powerful, context-aware assistant experience.
 
 ```
-┌───────────────────────────────────────┐
-│          Master Agent 🎮              │
-│          (Orchestrator)               │
-└───────┬──────┬──────┬──────┬─────────┘
-        │      │      │      │
-    ┌───▼──┐ ┌─▼───┐ ┌▼───┐ ┌▼───┐
-    │Memory│ │Search│ │Code│ │Write│
-    │ 📚   │ │ 🔍   │ │ 💻 │ │ ✍️  │
-    └──────┘ └──────┘ └────┘ └────┘
+┌───────────────────────────────────────────────────┐
+│               Master Agent 🎮                      │
+│               (Orchestrator)                       │
+└───────┬──────┬──────┬──────┬──────┬──────┬───────┘
+        │      │      │      │      │      │
+    ┌───▼──┐ ┌─▼───┐ ┌▼───┐ ┌▼───┐ ┌▼────┐ ┌▼────┐
+    │Memory│ │Search│ │Code│ │Write│ │Scan │ │Shot │
+    │ 📚   │ │ 🔍   │ │ 💻 │ │ ✍️  │ │ 📄  │ │ 📸  │
+    └──────┘ └──────┘ └────┘ └────┘ └─────┘ └─────┘
 ```
 
 ## ✨ Features
+
+- 🤖 **Specialized Agents**
+  - 🔍 Search Agent: Web research and information gathering
+  - ✍️ Writer Agent: Text composition and document creation
+  - 💻 Code Agent: Code generation and technical solutions
+  - 📚 Memory Agent: Context retention and information recall
+  - 📄 Scanner Agent: Document vectorization and semantic search
+  - 📸 Screenshot Agent: Screen capture and content analysis
+
+- 📊 **Document Management**
+  - Automatic document processing and vectorization
+  - Real-time monitoring of document changes
+  - Semantic search across document contents
+  - Intelligent document organization and retrieval
+  - Automatic cleanup of deleted documents
+
+- 🧠 **Memory Management**
+  - Personal information storage
+  - Conversation history tracking
+  - Context-aware responses
+  - Long-term information retention
+
+- 📝 **File Management**
+  - Markdown document creation
+  - Desktop file saving
+  - Automatic file organization
+  - Document backup and tracking
 
 ### 1. 🤖 Specialized Agents
 - **📚 Memory Agent**: Stores and retrieves information with categorized memory management
@@ -40,6 +67,20 @@ A sophisticated multi-agent system that combines specialized AI agents to handle
   - ⌨️ Code generation
   - 📖 Code explanation
   - ✅ Best practices implementation
+
+- **📄 Scanner Agent**: Manages document vectorization and storage
+  - 📑 Document scanning and indexing
+  - 🔍 Vector database management
+  - 📂 Document backup and tracking
+  - 🗑️ Automatic cleanup on deletion
+  - 🔄 Real-time synchronization
+
+- **📸 Screenshot Agent**: Captures and analyzes screen content
+  - 📱 Screen capture functionality
+  - 🔍 OCR text extraction
+  - 📊 Image content analysis
+  - 🗂️ Screenshot organization
+  - 💾 Automatic saving and indexing
 
 ### 2. 🧠 Memory Management
 The system maintains a structured memory system with categories:
@@ -120,6 +161,7 @@ python main.py
 │ 💬 Type your query naturally   │
 │ 🚪 'exit' to end session       │
 │ 💾 '@Desktop' to save files    │
+│ 📄 'scan' to process documents │
 └────────────────────────────────┘
 ```
 
@@ -149,6 +191,13 @@ python main.py
    "Create a JavaScript class for [purpose]"
    ```
 
+5. **📄 Document Management**
+   ```
+   "Scan this document for later reference"
+   "Find documents similar to [description]"
+   "Search my documents for information about [topic]"
+   ```
+
 ## 📁 Project Structure
 ```
 Project Root 📂
@@ -158,90 +207,11 @@ Project Root 📂
 │   ├── 📚 memory_agent.py  # Memory management
 │   ├── ✍️  writer_agent.py  # Text composition
 │   ├── 🔍 search_agent.py  # Web searching
-│   └── 💻 code_agent.py    # Code generation
+│   ├── 💻 code_agent.py    # Code generation
+│   └── 📄 scanner_agent.py # Document scanning
+├── 📂 documents/           # Managed documents
+├── 📊 vectorstore/         # Vector database
 ├── 🧠 memory.json          # Memory storage
 ├── 📦 requirements.txt     # Dependencies
 └── 🔑 .env                 # Environment vars
 ```
-
-## ⚙️ Configuration
-
-### 📚 Memory Storage
-```
-memory.json 📄
-├── 📋 Structure: JSON
-├── 🔄 Updates: Real-time
-└── 💾 Backup: Manual
-```
-
-### 🔐 Environment Variables
-- 🔑 `OPENAI_API_KEY`: Your OpenAI API key
-- ⚙️ Additional variables in `.env`
-
-## 💡 Best Practices
-
-1. **🧠 Memory Management**
-   ```
-   ┌─────────────────────┐
-   │ ✅ Use categories   │
-   │ 📝 Add context      │
-   │ 🔄 Verify often     │
-   └─────────────────────┘
-   ```
-
-2. **📝 Document Creation**
-   ```
-   ┌─────────────────────┐
-   │ 💾 Use @Desktop     │
-   │ 🎨 Set style        │
-   │ 📋 Clear titles     │
-   └─────────────────────┘
-   ```
-
-3. **💻 Code Generation**
-   ```
-   ┌─────────────────────┐
-   │ 📋 Clear specs      │
-   │ 🔧 Set language     │
-   │ 🛡️ Error handling   │
-   └─────────────────────┘
-   ```
-
-## ⚠️ Error Handling
-```
-Error Types 🛡️
-├── 🌐 API Failures
-├── 📂 File Operations
-├── 🧠 Memory Access
-├── 🔍 Search Issues
-└── ❌ Invalid Queries
-```
-
-## 🤝 Contributing
-
-1. 🔀 Fork repository
-2. 🌿 Create feature branch
-3. ✍️ Make changes
-4. 🔄 Push changes
-5. 📬 Create Pull Request
-
-## 📜 License
-
-MIT License 📄 - feel free to use and modify as needed.
-
-## 🆘 Support
-
-For issues and feature requests, please create an issue in the repository.
-
-## 🎯 Quick Reference
-
-```
-Commands Quick Look 👀
-├── 💬 Chat Commands
-│   ├── exit
-│   └── help
-├── 💾 File Commands
-│   └── @Desktop
-└── 🔍 Search Commands
-    └── "search for..."
-``` 

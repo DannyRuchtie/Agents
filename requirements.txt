@@ -1,4 +1,12 @@
+langchain-core==0.1.53
+langchain-openai==0.1.5
+langchain-community>=0.0.10
 openai==1.12.0
-httpx==0.26.0
 python-dotenv==1.0.0
-duckduckgo-search>=4.1.1 
+duckduckgo-search>=4.1.1
+chromadb>=0.4.22
+watchdog>=3.0.0
+Pillow>=10.0.0
+pyautogui>=0.9.54
+pytesseract>=0.3.10
+numpy>=1.24.0 

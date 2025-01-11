@@ -11,6 +11,7 @@ from agents.writer_agent import WriterAgent
 from agents.search_agent import SearchAgent
 from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
+from agents.screenshot_agent import ScreenshotAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -50,6 +51,8 @@ class MasterAgent(BaseAgent):
         self.search_agent = SearchAgent()
         self.writer_agent = WriterAgent()
         self.code_agent = CodeAgent()
+        self.scanner_agent = ScannerAgent()
+        self.screenshot_agent = ScreenshotAgent()
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
@@ -90,52 +93,25 @@ class MasterAgent(BaseAgent):
             print(f"⚠️  Search error: {str(e)} - using context from memory only")
             return []
     
-    async def process_request(self, query: str) -> str:
-        """Process a user request using appropriate agents."""
+    async def process(self, query: str) -> str:
+        """Process a user query and coordinate agent responses."""
         print("\n🤔 Processing your request...")
         
-        # First check memory for context
-        print("📚 Checking memory for relevant information...")
-        memories = await self._check_memory(query)
-        
-        if memories:
-            context = "Previous relevant information:\n" + "\n".join(memories)
-        else:
-            context = ""
-        
-        # Check if this is a desktop save request
-        should_save_to_desktop = any(phrase in query.lower() for phrase in [
-            "save it", "save this", "save on", "save to", "put it on", "put on", "write on"
-        ]) and any(word in query.lower() for word in ["desktop", "desk"])
-        
-        # Add @Desktop flag if needed
-        if should_save_to_desktop and "@Desktop" not in query:
-            query = query + " @Desktop"
-        
-        # For desktop save requests, we primarily use the writer agent
-        if "@Desktop" in query:
-            print("✍️ Composing document for desktop...")
-            # Check memory for context
-            memories = await self._check_memory(query)
-            context = "Memory context:\n" + "\n".join(memories) + "\n\n" if memories else ""
-            
-            # Get search results if needed
-            search_results = await self._perform_search(query)
-            if search_results:
-                context += "Search results:\n" + "\n".join(search_results) + "\n\n"
-            
-            # Use writer agent to compose and save the document
-            return await self.writer_agent.expand(query, context)
-        
-        # For other requests, determine which agents to use
+        # First, determine which agents to use
         agent_selection = await self.process(
-            f"Analyze this query and respond with ONLY the agent names needed (memory, search, writer, code), "
+            f"Analyze this query and respond with ONLY the agent names needed (memory, search, writer, code, scanner, screenshot), "
             f"separated by commas. Choose only the essential agents for this task.\nQuery: {query}"
         )
         selected_agents = [a.strip().lower() for a in agent_selection.split(",")]
         
         tasks = []
         context = ""
+        
+        # Check if this is a screenshot request
+        if "screenshot" in selected_agents:
+            print("📸 Capturing and analyzing screen content...")
+            screenshot_result = await self.screenshot_agent.process_screen_content(query)
+            return screenshot_result
         
         # Memory check is always done first if memory agent is selected
         if "memory" in selected_agents:
@@ -155,6 +131,11 @@ class MasterAgent(BaseAgent):
         if "code" in selected_agents:
             print("💻 Preparing to generate code...")
             tasks.append(self.code_agent.generate_code(query))
+        
+        # Document scanning if needed
+        if "scanner" in selected_agents:
+            print("📄 Processing documents...")
+            tasks.append(self.scanner_agent.process_documents(query))
         
         # Writer agent for composing the response if selected
         if "writer" in selected_agents:
@@ -178,14 +159,6 @@ class MasterAgent(BaseAgent):
         if len(results) > 1:
             final_response += f"\n\n💻 Here's some relevant code:\n{results[1]}"
         
-        # Store the interaction in system history
-        print("💾 Storing interaction in memory...")
-        await self.memory_agent.store(
-            "system",
-            f"Query: {query}\nResponse: {final_response[:200]}...",  # Store truncated version
-            subcategory="history"
-        )
-        
         return final_response
 
 
@@ -201,6 +174,8 @@ async def chat_interface():
     print("  ✍️  Writer Agent - Composes and summarizes text")
     print("  💻 Code Agent - Generates and explains code")
     print("  📚 Memory Agent - Stores and retrieves information")
+    print("  📄 Scanner Agent - Manages document vectorization and search")
+    print("  📸 Screenshot Agent - Capture and analyze screen content")
     print("\nType 'exit' to end the chat.")
     
     while True:
