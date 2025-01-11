@@ -95,9 +95,28 @@ pip install -r requirements.txt
 ```
 
 3. **🔑 Configure OpenAI API**
-Create a `.env` file in the project root:
+
+⚠️ **Security Note**: Never commit your API key to version control!
+
+Create a `.env` file in the project root (this file is git-ignored):
+```bash
+# Create .env file
+touch .env
+
+# Add your API key (replace with your actual key)
+echo "OPENAI_API_KEY=your-api-key-here" >> .env
 ```
-OPENAI_API_KEY=your-api-key-here
+
+Or set it as an environment variable:
+```bash
+# Linux/MacOS
+export OPENAI_API_KEY=your-api-key-here
+
+# Windows (Command Prompt)
+set OPENAI_API_KEY=your-api-key-here
+
+# Windows (PowerShell)
+$env:OPENAI_API_KEY="your-api-key-here"
 ```
 
 ## 📖 Usage
