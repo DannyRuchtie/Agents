@@ -68,5 +68,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-agents/__pycache__/memory_agent.cpython-311.pyc
-/agents/__pycache__
+
+# Sensitive files
+.env
+.env.*
+*.key
+secrets/
+credentials/
+config/secrets.json

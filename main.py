@@ -16,17 +16,14 @@ from agents.base_agent import BaseAgent
 load_dotenv()
 
 def get_api_key() -> str:
-    """Get the OpenAI API key from memory.json or environment."""
-    memory_file = Path("memory.json")
-    if memory_file.exists():
-        try:
-            with open(memory_file, 'r') as f:
-                memories = json.load(f)
-                if api_key := memories.get("config", {}).get("api_keys", {}).get("openai"):
-                    return api_key
-        except (json.JSONDecodeError, KeyError):
-            pass
-    return os.getenv("OPENAI_API_KEY", "")
+    """Get the OpenAI API key from environment variables."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "OpenAI API key not found. Please set it in your .env file or "
+            "environment variables as OPENAI_API_KEY"
+        )
+    return api_key
 
 # Set up OpenAI API key
 os.environ["OPENAI_API_KEY"] = get_api_key()
