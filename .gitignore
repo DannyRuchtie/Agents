@@ -38,3 +38,5 @@ htmlcov/
 dist/
 build/
 *.egg-info/
+*.pyc
+/agents/__pycache__

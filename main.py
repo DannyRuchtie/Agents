@@ -53,6 +53,10 @@ class MasterAgent(BaseAgent):
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
+        # Store personal information if it contains name
+        if "my name is" in query.lower():
+            await self.memory_agent.store("personal", query)
+            
         # Store family information if detected
         if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children"]):
             await self.memory_agent.store("contacts", query, "family")
@@ -61,8 +65,17 @@ class MasterAgent(BaseAgent):
         if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children", "family"]):
             return await self.memory_agent.retrieve("contacts", query, "family")
             
-        # For other queries, try general retrieval
-        return await self.memory_agent.retrieve("interactions", query)
+        # For other queries, try retrieving from personal and system history
+        results = []
+        try:
+            personal_info = await self.memory_agent.retrieve("personal", query)
+            system_history = await self.memory_agent.retrieve("system", query, "history")
+            results.extend(personal_info)
+            results.extend(system_history)
+        except Exception as e:
+            print(f"Memory retrieval warning: {str(e)}")
+        
+        return results
     
     async def _perform_search(self, query: str) -> List[str]:
         """Perform web search with error handling."""
@@ -165,11 +178,12 @@ class MasterAgent(BaseAgent):
         if len(results) > 1:
             final_response += f"\n\n💻 Here's some relevant code:\n{results[1]}"
         
-        # Store the interaction in memory
+        # Store the interaction in system history
         print("💾 Storing interaction in memory...")
         await self.memory_agent.store(
-            "interactions",
-            f"Query: {query}\nResponse: {final_response[:200]}..."  # Store truncated version
+            "system",
+            f"Query: {query}\nResponse: {final_response[:200]}...",  # Store truncated version
+            subcategory="history"
         )
         
         return final_response
