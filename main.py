@@ -11,8 +11,8 @@ from agents.writer_agent import WriterAgent
 from agents.search_agent import SearchAgent
 from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
-from agents.screenshot_agent import ScreenshotAgent
 from agents.scanner_agent import ScannerAgent
+from agents.vision_agent import VisionAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -53,7 +53,7 @@ class MasterAgent(BaseAgent):
         self.writer_agent = WriterAgent()
         self.code_agent = CodeAgent()
         self.scanner_agent = ScannerAgent()
-        self.screenshot_agent = ScreenshotAgent()
+        self.vision_agent = VisionAgent()
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
@@ -94,14 +94,14 @@ class MasterAgent(BaseAgent):
             print(f"⚠️  Search error: {str(e)} - using context from memory only")
             return []
     
-    async def _select_agents(self, query: str) -> List[str]:
+    async def _select_agents(self, query: str, has_image: bool = False) -> List[str]:
         """Determine which agents to use for a given query."""
         # Simple rule-based agent selection
         agents = []
         
-        # Screenshot agent for screen capture requests
-        if any(word in query.lower() for word in ["screenshot", "screen", "capture", "show me"]):
-            agents.append("screenshot")
+        # Vision agent for image analysis or screenshots
+        if has_image or any(word in query.lower() for word in ["screenshot", "screen", "capture", "show me", "analyze image", "look at", "what's in this image"]):
+            agents.append("vision")
             
         # Memory agent for personal or historical information
         if any(word in query.lower() for word in ["remember", "recall", "history", "name", "family"]):
@@ -129,21 +129,25 @@ class MasterAgent(BaseAgent):
             
         return agents
     
-    async def process(self, query: str) -> str:
+    async def process(self, query: str, image_path: Optional[str] = None) -> str:
         """Process a user query and coordinate agent responses."""
         print("\n🤔 Processing your request...")
         
-        # Determine which agents to use
+        # If an image path is provided, use vision agent to analyze it
+        if image_path:
+            print("🔍 Analyzing provided image...")
+            return await self.vision_agent.analyze_image(image_path, query)
+            
+        # For other requests, determine which agents to use
         selected_agents = await self._select_agents(query)
         
         tasks = []
         context = ""
         
         # Check if this is a screenshot request
-        if "screenshot" in selected_agents:
+        if "vision" in selected_agents and "screenshot" in query.lower():
             print("📸 Capturing and analyzing screen content...")
-            screenshot_result = await self.screenshot_agent.process_screen_content(query)
-            return screenshot_result
+            return await self.vision_agent.process_screen_content(query)
         
         # Memory check is always done first if memory agent is selected
         if "memory" in selected_agents:
@@ -207,8 +211,10 @@ async def chat_interface():
     print("  💻 Code Agent - Generates and explains code")
     print("  📚 Memory Agent - Stores and retrieves information")
     print("  📄 Scanner Agent - Manages document vectorization and search")
-    print("  📸 Screenshot Agent - Capture and analyze screen content")
-    print("\nType 'exit' to end the chat.")
+    print("  🖼️  Vision Agent - Analyzes images and screen content")
+    print("\nTo analyze an image, use: analyze <path_to_image> [optional question]")
+    print("To take a screenshot, use: screenshot [optional question]")
+    print("Type 'exit' to end the chat.")
     
     while True:
         try:
@@ -224,8 +230,42 @@ async def chat_interface():
             if not query:
                 continue
             
-            # Process the query
-            response = await master.process(query)
+            # Check if this is an image path with a query
+            if query.startswith(("'", '"')):
+                # Find the closing quote
+                quote_char = query[0]
+                end_quote_index = query.find(quote_char, 1)
+                if end_quote_index != -1:
+                    # Extract path and query
+                    image_path = query[1:end_quote_index]
+                    image_query = query[end_quote_index + 1:].strip()
+                    response = await master.process(image_query, image_path=image_path)
+                else:
+                    response = "Invalid format. Please make sure to close the quotes around the file path."
+            # Check if this is an explicit analyze command
+            elif query.lower().startswith("analyze "):
+                remaining = query[8:].strip()
+                if remaining.startswith(("'", '"')):
+                    # Find the closing quote
+                    quote_char = remaining[0]
+                    end_quote_index = remaining.find(quote_char, 1)
+                    if end_quote_index != -1:
+                        # Extract path and query
+                        image_path = remaining[1:end_quote_index]
+                        image_query = remaining[end_quote_index + 1:].strip()
+                        response = await master.process(image_query, image_path=image_path)
+                    else:
+                        response = "Invalid format. Please make sure to close the quotes around the file path."
+                else:
+                    # Try to split on space if no quotes
+                    parts = remaining.split(None, 1)
+                    image_path = parts[0]
+                    image_query = parts[1] if len(parts) > 1 else ""
+                    response = await master.process(image_query, image_path=image_path)
+            else:
+                # Process the query normally
+                response = await master.process(query)
+            
             print("\n🤖 Assistant:\n")
             print(response)
             

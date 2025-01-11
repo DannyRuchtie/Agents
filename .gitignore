@@ -41,6 +41,7 @@ build/
 *.pyc
 /agents/__pycache__
 /screenshots
+/shared_images
 /venv
 /vectorstore
 /venv/lib

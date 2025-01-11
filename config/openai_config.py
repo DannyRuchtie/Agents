@@ -82,7 +82,7 @@ AGENT_CONFIGS = {
     "code": {
         "model": DEFAULT_MODEL,
         "temperature": 0.1,  # Very precise code generation
-    },
+    },``
     "vision": {
         "model": DEFAULT_MODEL,
         "temperature": 0.2,  # Precise image analysis
