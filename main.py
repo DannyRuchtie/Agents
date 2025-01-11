@@ -37,14 +37,6 @@ class MasterAgent(BaseAgent):
         """Check if we have relevant information in memory."""
         return await self.memory_agent.retrieve(query)
     
-    async def _needs_code(self, query: str) -> bool:
-        """Determine if the query requires code generation."""
-        response = await self.process(
-            f"Does this query require code generation or programming examples? "
-            f"Query: {query}\nRespond with just 'yes' or 'no'."
-        )
-        return response.lower().strip() == "yes"
-    
     async def _perform_search(self, query: str) -> List[str]:
         """Perform web search with error handling."""
         try:
@@ -62,7 +54,31 @@ class MasterAgent(BaseAgent):
         """Process a user request using the appropriate agents."""
         print("\n🤔 Processing your request...")
         
-        # First, determine which agents to use
+        # Check if this is a desktop save request
+        should_save_to_desktop = any(phrase in query.lower() for phrase in [
+            "save it", "save this", "save on", "save to", "put it on", "put on", "write on"
+        ]) and any(word in query.lower() for word in ["desktop", "desk"])
+        
+        # Add @Desktop flag if needed
+        if should_save_to_desktop and "@Desktop" not in query:
+            query = query + " @Desktop"
+        
+        # For desktop save requests, we primarily use the writer agent
+        if "@Desktop" in query:
+            print("✍️ Composing document for desktop...")
+            # Check memory for context
+            memories = await self._check_memory(query)
+            context = "Memory context:\n" + "\n".join(memories) + "\n\n" if memories else ""
+            
+            # Get search results if needed
+            search_results = await self._perform_search(query)
+            if search_results:
+                context += "Search results:\n" + "\n".join(search_results) + "\n\n"
+            
+            # Use writer agent to compose and save the document
+            return await self.writer_agent.expand(query, context)
+        
+        # For other requests, determine which agents to use
         agent_selection = await self.process(
             f"Analyze this query and respond with ONLY the agent names needed (memory, search, writer, code), "
             f"separated by commas. Choose only the essential agents for this task.\nQuery: {query}"
@@ -77,7 +93,6 @@ class MasterAgent(BaseAgent):
             print("📚 Checking memory for relevant information...")
             memories = await self._check_memory(query)
             if memories:
-                print("🔍 Found relevant memories!")
                 context += "Memory context:\n" + "\n".join(memories) + "\n\n"
         
         # Search is done next if selected

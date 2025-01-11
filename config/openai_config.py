@@ -15,11 +15,13 @@ def get_client() -> OpenAI:
     return _client
 
 # Default model settings
-DEFAULT_MODEL = "o1"  # O1 model for complex reasoning tasks
+DEFAULT_MODEL = "gpt-4o"  # GPT-4o model for enhanced reasoning
+
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "seed": 42,  # For reproducibility
     "response_format": {"type": "text"},  # Ensure text responses
     "stream": False,  # Default to non-streaming
+    "max_tokens": 4096,  # Standard context window for GPT-4o
 }
 
 # Agent-specific configurations
@@ -57,4 +59,4 @@ def get_agent_config(agent_type: str) -> Dict[str, Any]:
     """
     config = AGENT_CONFIGS.get(agent_type, {}).copy()
     config.update(DEFAULT_SETTINGS)
-    return config 
+    return config
