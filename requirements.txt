@@ -1,6 +1,7 @@
 langchain-core==0.1.53
 langchain-openai==0.1.5
 langchain-community>=0.0.10
+langchain-text-splitters>=0.0.1
 openai==1.12.0
 python-dotenv==1.0.0
 duckduckgo-search>=4.1.1
@@ -9,4 +10,9 @@ watchdog>=3.0.0
 Pillow>=10.0.0
 pyautogui>=0.9.54
 pytesseract>=0.3.10
-numpy>=1.24.0 
+numpy>=1.24.0
+pathlib>=1.0.1
+typing-extensions>=4.5.0
+python-dateutil>=2.8.2
+aiohttp>=3.9.1
+async-timeout>=4.0.3 
