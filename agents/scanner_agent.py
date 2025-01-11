@@ -43,8 +43,11 @@ class ScannerAgent(BaseAgent):
         self.docs_dir = Path("documents")
         self.docs_dir.mkdir(exist_ok=True)
         
-        # Initialize vector store
-        self.embeddings = OpenAIEmbeddings()
+        # Initialize vector store with basic configuration
+        self.embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            dimensions=1536
+        )
         self.vectorstore = Chroma(
             persist_directory="vectorstore",
             embedding_function=self.embeddings

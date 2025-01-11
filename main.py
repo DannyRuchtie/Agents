@@ -13,6 +13,7 @@ from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
+from agents.location_agent import LocationAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -54,6 +55,7 @@ class MasterAgent(BaseAgent):
         self.code_agent = CodeAgent()
         self.scanner_agent = ScannerAgent()
         self.vision_agent = VisionAgent()
+        self.location_agent = LocationAgent()
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
@@ -94,36 +96,36 @@ class MasterAgent(BaseAgent):
             print(f"⚠️  Search error: {str(e)} - using context from memory only")
             return []
     
-    async def _select_agents(self, query: str, has_image: bool = False) -> List[str]:
-        """Determine which agents to use for a given query."""
-        # Simple rule-based agent selection
+    def _select_agents(self, query: str) -> List[str]:
+        """Select which agents to use based on the query."""
         agents = []
+        query = query.lower()
         
-        # Vision agent for image analysis or screenshots
-        if has_image or any(word in query.lower() for word in ["screenshot", "screen", "capture", "show me", "analyze image", "look at", "what's in this image"]):
+        # Location and weather queries
+        if any(word in query for word in ["where", "location", "weather", "temperature", "degrees", "hot", "cold"]):
+            agents.append("location")
+            
+        # Screenshot and image analysis
+        if any(word in query for word in ["screenshot", "capture screen", "what do you see"]):
             agents.append("vision")
             
-        # Memory agent for personal or historical information
-        if any(word in query.lower() for word in ["remember", "recall", "history", "name", "family"]):
+        # Memory queries
+        if any(word in query for word in ["remember", "recall", "memory", "forget"]):
             agents.append("memory")
             
-        # Search agent for web queries
-        if any(word in query.lower() for word in ["search", "find", "look up", "what is", "who is", "tell me about"]):
+        # Search queries
+        if any(word in query for word in ["search", "find", "look up"]):
             agents.append("search")
             
-        # Code agent for programming tasks
-        if any(word in query.lower() for word in ["code", "program", "function", "class", "script"]):
+        # Code queries
+        if any(word in query for word in ["code", "function", "program"]):
             agents.append("code")
             
-        # Scanner agent for document processing
-        if any(word in query.lower() for word in ["scan", "document", "read file", "process file"]):
+        # Scanner queries
+        if any(word in query for word in ["scan", "document", "read file"]):
             agents.append("scanner")
             
-        # Writer agent for text composition
-        if any(word in query.lower() for word in ["write", "compose", "summarize", "explain"]):
-            agents.append("writer")
-            
-        # Default to writer agent if no specific agents were selected
+        # Default to writer agent if no specific agents selected
         if not agents:
             agents.append("writer")
             
@@ -139,68 +141,66 @@ class MasterAgent(BaseAgent):
             return await self.vision_agent.analyze_image(image_path, query)
             
         # For other requests, determine which agents to use
-        selected_agents = await self._select_agents(query)
-        
-        tasks = []
-        context = ""
+        selected_agents = self._select_agents(query)
         
         # Check if this is a screenshot request
         if "vision" in selected_agents and "screenshot" in query.lower():
             print("📸 Capturing and analyzing screen content...")
             return await self.vision_agent.process_screen_content(query)
+            
+        # Check if this is a location/weather request
+        if "location" in selected_agents:
+            print("📍 Getting location and weather information...")
+            return await self.location_agent.process(query)
         
-        # Memory check is always done first if memory agent is selected
+        # Process with other agents
+        response_parts = []
+        
+        # Memory check
         if "memory" in selected_agents:
             print("📚 Checking memory for relevant information...")
             memories = await self._check_memory(query)
             if memories:
-                context += "Memory context:\n" + "\n".join(memories) + "\n\n"
+                response_parts.append("📚 From memory:\n" + "\n".join(memories))
         
-        # Search is done next if selected
+        # Search
         if "search" in selected_agents:
             print("🌐 Searching the web for information...")
             search_results = await self._perform_search(query)
             if search_results:
-                context += "Search results:\n" + "\n".join(search_results) + "\n\n"
+                response_parts.append("🌐 Search results:\n" + "\n".join(search_results))
         
-        # Code generation if needed
+        # Code generation
         if "code" in selected_agents:
             print("💻 Preparing to generate code...")
-            tasks.append(self.code_agent.generate_code(query))
+            code_response = await self.code_agent.generate_code(query)
+            if code_response:
+                response_parts.append("💻 Code:\n" + code_response)
         
-        # Document scanning if needed
+        # Document scanning
         if "scanner" in selected_agents:
             print("📄 Processing documents...")
-            tasks.append(self.scanner_agent.process_documents(query))
+            scan_response = await self.scanner_agent.process_documents(query)
+            if scan_response:
+                response_parts.append("📄 Document analysis:\n" + scan_response)
         
-        # Writer agent for composing the response if selected
+        # Writer agent or base processing
         if "writer" in selected_agents:
             print("✍️ Composing response...")
-            tasks.append(self.writer_agent.expand(query, context))
-        elif context:  # If no writer but we have context, use base processing
-            tasks.append(super().process(
-                f"Based on this context and query, provide a clear and concise response:\n\n"
-                f"Context:\n{context}\n\nQuery: {query}"
-            ))
+            context = "\n\n".join(response_parts) if response_parts else ""
+            writer_response = await self.writer_agent.expand(query, context)
+            if writer_response:
+                response_parts.append(writer_response)
+        elif not response_parts:  # If no other responses, use base processing
+            base_response = await super().process(query)
+            response_parts.append(base_response)
         
-        # If no specific agents were selected, use base processing
-        if not tasks:
-            tasks.append(super().process(query))
-        
-        # Wait for all tasks to complete
-        results = await asyncio.gather(*tasks)
-        
-        # Combine results
-        final_response = results[0]
-        if len(results) > 1:
-            final_response += f"\n\n💻 Here's some relevant code:\n{results[1]}"
-        
-        return final_response
+        # Combine all responses
+        return "\n\n".join(response_parts)
 
 
 async def chat_interface():
-    """Interactive chat interface for the master agent."""
-    # Initialize master agent
+    """Run the chat interface."""
     print("\n🤖 Initializing AI Agents...")
     master = MasterAgent()
     
@@ -212,8 +212,11 @@ async def chat_interface():
     print("  📚 Memory Agent - Stores and retrieves information")
     print("  📄 Scanner Agent - Manages document vectorization and search")
     print("  🖼️  Vision Agent - Analyzes images and screen content")
+    print("  📍 Location Agent - Provides location and weather information")
+    
     print("\nTo analyze an image, use: analyze <path_to_image> [optional question]")
     print("To take a screenshot, use: screenshot [optional question]")
+    print("To get weather, use: weather or temperature")
     print("Type 'exit' to end the chat.")
     
     while True:

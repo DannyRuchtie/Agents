@@ -1,17 +1,17 @@
 # 🤖 Multi-Agent AI Assistant
 
-A sophisticated multi-agent system that combines specialized AI agents to handle various tasks efficiently. The system uses LangChain v0.3 and OpenAI's latest models to provide a powerful, context-aware assistant experience.
+A sophisticated multi-agent system that combines specialized AI agents to handle various tasks efficiently. The system uses LangChain and OpenAI's latest models to provide a powerful, context-aware assistant experience.
 
 ```
-┌───────────────────────────────────────────────────┐
-│               Master Agent 🎮                      │
-│               (Orchestrator)                       │
-└───────┬──────┬──────┬──────┬──────┬──────┬───────┘
-        │      │      │      │      │      │
-    ┌───▼──┐ ┌─▼───┐ ┌▼───┐ ┌▼───┐ ┌▼────┐ ┌▼────┐
-    │Memory│ │Search│ │Code│ │Write│ │Scan │ │Shot │
-    │ 📚   │ │ 🔍   │ │ 💻 │ │ ✍️  │ │ 📄  │ │ 📸  │
-    └──────┘ └──────┘ └────┘ └────┘ └─────┘ └─────┘
+┌───────────────────────────────────────────────────────────────┐
+│                     Master Agent 🎮                           │
+│                     (Orchestrator)                            │
+└───────┬──────┬──────┬──────┬──────┬──────┬──────┬───────────┘
+        │      │      │      │      │      │      │
+    ┌───▼──┐ ┌─▼───┐ ┌▼───┐ ┌▼───┐ ┌▼────┐ ┌▼────┐ ┌▼────┐
+    │Memory│ │Search│ │Code│ │Write│ │Scan │ │Vision│ │📍Loc│
+    │ 📚   │ │ 🔍   │ │ 💻 │ │ ✍️  │ │ 📄  │ │ 🖼️   │ │🌤️   │
+    └──────┘ └──────┘ └────┘ └────┘ └─────┘ └─────┘ └─────┘
 ```
 
 ## ✨ Features
@@ -22,7 +22,8 @@ A sophisticated multi-agent system that combines specialized AI agents to handle
   - 💻 Code Agent: Code generation and technical solutions
   - 📚 Memory Agent: Context retention and information recall
   - 📄 Scanner Agent: Document vectorization and semantic search
-  - 📸 Screenshot Agent: Screen capture and content analysis
+  - 🖼️ Vision Agent: Image analysis and screen capture
+  - 📍 Location Agent: Location and weather information
 
 - 📊 **Document Management**
   - Automatic document processing and vectorization
@@ -75,12 +76,19 @@ A sophisticated multi-agent system that combines specialized AI agents to handle
   - 🗑️ Automatic cleanup on deletion
   - 🔄 Real-time synchronization
 
-- **📸 Screenshot Agent**: Captures and analyzes screen content
-  - 📱 Screen capture functionality
+- **🖼️ Vision Agent**: Analyzes images and screen content
+  - 📸 Screen capture functionality
   - 🔍 OCR text extraction
   - 📊 Image content analysis
-  - 🗂️ Screenshot organization
+  - 🗂️ Image organization
   - 💾 Automatic saving and indexing
+
+- **📍 Location Agent**: Provides location and weather information
+  - 🌍 IP-based location detection
+  - 🌤️ Real-time weather conditions
+  - 🌡️ Temperature and humidity data
+  - 💨 Wind speed and conditions
+  - 🌧️ Precipitation forecasts
 
 ### 2. 🧠 Memory Management
 The system maintains a structured memory system with categories:
@@ -157,12 +165,15 @@ python main.py
 
 ### 🎮 Basic Commands
 ```
-┌────────────────────────────────┐
-│ 💬 Type your query naturally   │
-│ 🚪 'exit' to end session       │
-│ 💾 '@Desktop' to save files    │
-│ 📄 'scan' to process documents │
-└────────────────────────────────┘
+┌────────────────────────────────────────┐
+│ 💬 Type your query naturally           │
+│ 🚪 'exit' to end session               │
+│ 💾 '@Desktop' to save files            │
+│ 📄 'scan' to process documents         │
+│ 📸 'screenshot' to capture screen      │
+│ 🖼️ 'analyze' to examine images         │
+│ 📍 'weather' for local conditions      │
+└────────────────────────────────────────┘
 ```
 
 ### 💡 Example Queries
@@ -195,7 +206,19 @@ python main.py
    ```
    "Scan this document for later reference"
    "Find documents similar to [description]"
-   "Search my documents for information about [topic]"
+   ```
+
+6. **🖼️ Image Analysis**
+   ```
+   "analyze 'path/to/image.jpg' what do you see"
+   "screenshot and describe what's on my screen"
+   ```
+
+7. **📍 Location & Weather**
+   ```
+   "What's the weather like?"
+   "Do I need an umbrella today?"
+   "What's the temperature right now?"
    ```
 
 ## 📁 Project Structure
@@ -208,9 +231,13 @@ Project Root 📂
 │   ├── ✍️  writer_agent.py  # Text composition
 │   ├── 🔍 search_agent.py  # Web searching
 │   ├── 💻 code_agent.py    # Code generation
-│   └── 📄 scanner_agent.py # Document scanning
+│   ├── 📄 scanner_agent.py # Document scanning
+│   ├── 🖼️ vision_agent.py  # Image analysis
+│   └── 📍 location_agent.py # Location & weather
 ├── 📂 documents/           # Managed documents
 ├── 📊 vectorstore/         # Vector database
+├── 📸 screenshots/         # Captured screens
+├── 🖼️ shared_images/       # Analyzed images
 ├── 🧠 memory.json          # Memory storage
 ├── 📦 requirements.txt     # Dependencies
 └── 🔑 .env                 # Environment vars

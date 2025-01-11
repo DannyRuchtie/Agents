@@ -32,15 +32,22 @@ class BaseAgent:
         Returns:
             The processed response
         """
-        # Merge kwargs with default config
-        config = self.config.copy()
-        config.update(kwargs)
+        # Create messages list
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": input_text}
+        ]
+        
+        # Extract model and temperature from config
+        config = {
+            "model": self.config["model"],
+            "temperature": self.config.get("temperature", 0.7),
+            "max_tokens": self.config.get("max_tokens", 4096)
+        }
+        config.update(kwargs)  # Allow overriding with kwargs
         
         response = self.client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": input_text}
-            ],
+            messages=messages,
             **config
         )
         return response.choices[0].message.content 
