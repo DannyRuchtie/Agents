@@ -12,6 +12,7 @@ from agents.search_agent import SearchAgent
 from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
 from agents.screenshot_agent import ScreenshotAgent
+from agents.scanner_agent import ScannerAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -93,16 +94,47 @@ class MasterAgent(BaseAgent):
             print(f"⚠️  Search error: {str(e)} - using context from memory only")
             return []
     
+    async def _select_agents(self, query: str) -> List[str]:
+        """Determine which agents to use for a given query."""
+        # Simple rule-based agent selection
+        agents = []
+        
+        # Screenshot agent for screen capture requests
+        if any(word in query.lower() for word in ["screenshot", "screen", "capture", "show me"]):
+            agents.append("screenshot")
+            
+        # Memory agent for personal or historical information
+        if any(word in query.lower() for word in ["remember", "recall", "history", "name", "family"]):
+            agents.append("memory")
+            
+        # Search agent for web queries
+        if any(word in query.lower() for word in ["search", "find", "look up", "what is", "who is", "tell me about"]):
+            agents.append("search")
+            
+        # Code agent for programming tasks
+        if any(word in query.lower() for word in ["code", "program", "function", "class", "script"]):
+            agents.append("code")
+            
+        # Scanner agent for document processing
+        if any(word in query.lower() for word in ["scan", "document", "read file", "process file"]):
+            agents.append("scanner")
+            
+        # Writer agent for text composition
+        if any(word in query.lower() for word in ["write", "compose", "summarize", "explain"]):
+            agents.append("writer")
+            
+        # Default to writer agent if no specific agents were selected
+        if not agents:
+            agents.append("writer")
+            
+        return agents
+    
     async def process(self, query: str) -> str:
         """Process a user query and coordinate agent responses."""
         print("\n🤔 Processing your request...")
         
-        # First, determine which agents to use
-        agent_selection = await self.process(
-            f"Analyze this query and respond with ONLY the agent names needed (memory, search, writer, code, scanner, screenshot), "
-            f"separated by commas. Choose only the essential agents for this task.\nQuery: {query}"
-        )
-        selected_agents = [a.strip().lower() for a in agent_selection.split(",")]
+        # Determine which agents to use
+        selected_agents = await self._select_agents(query)
         
         tasks = []
         context = ""
@@ -142,14 +174,14 @@ class MasterAgent(BaseAgent):
             print("✍️ Composing response...")
             tasks.append(self.writer_agent.expand(query, context))
         elif context:  # If no writer but we have context, use base processing
-            tasks.append(self.process(
+            tasks.append(super().process(
                 f"Based on this context and query, provide a clear and concise response:\n\n"
                 f"Context:\n{context}\n\nQuery: {query}"
             ))
         
         # If no specific agents were selected, use base processing
         if not tasks:
-            tasks.append(self.process(query))
+            tasks.append(super().process(query))
         
         # Wait for all tasks to complete
         results = await asyncio.gather(*tasks)
@@ -193,7 +225,7 @@ async def chat_interface():
                 continue
             
             # Process the query
-            response = await master.process_request(query)
+            response = await master.process(query)
             print("\n🤖 Assistant:\n")
             print(response)
             

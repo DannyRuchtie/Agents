@@ -40,3 +40,7 @@ build/
 *.egg-info/
 *.pyc
 /agents/__pycache__
+/screenshots
+/venv
+/vectorstore
+/venv/lib

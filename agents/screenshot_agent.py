@@ -1,4 +1,4 @@
-"""Screenshot agent for capturing and analyzing screen content."""
+"""Vision agent for analyzing images and screen content."""
 import os
 import time
 from datetime import datetime
@@ -7,32 +7,35 @@ import pyautogui
 import pytesseract
 from PIL import Image
 import numpy as np
-from base_agent import BaseAgent
+from .base_agent import BaseAgent
+from config.openai_config import create_image_message
 
-SCREENSHOT_SYSTEM_PROMPT = """You are a specialized Screenshot Agent that captures and analyzes screen content.
+VISION_SYSTEM_PROMPT = """You are a specialized Vision Agent that analyzes visual content.
 Your tasks include:
-1. Capturing screenshots of the entire screen or specific regions
-2. Extracting text from images using OCR
-3. Analyzing image content and providing descriptions
-4. Organizing and managing screenshot files
-5. Integrating with other agents to provide visual context
-Focus on accurate capture and analysis while maintaining organized storage."""
+1. Analyzing shared images from the user
+2. Capturing and analyzing screenshots when requested
+3. Extracting text from images using OCR and vision analysis
+4. Providing detailed descriptions of visual content
+5. Organizing and managing analyzed images
+Focus on accurate analysis and clear communication of visual content."""
 
-class ScreenshotAgent(BaseAgent):
-    """Agent for capturing and analyzing screen content."""
+class VisionAgent(BaseAgent):
+    """Agent for analyzing images and screen content."""
     
     def __init__(self):
-        """Initialize the Screenshot Agent."""
+        """Initialize the Vision Agent."""
         super().__init__(
-            agent_type="screenshot",
-            system_prompt=SCREENSHOT_SYSTEM_PROMPT,
+            agent_type="vision",  # Use vision-specific configuration
+            system_prompt=VISION_SYSTEM_PROMPT,
         )
         self.screenshots_dir = Path("screenshots")
         self.screenshots_dir.mkdir(exist_ok=True)
+        self.shared_dir = Path("shared_images")
+        self.shared_dir.mkdir(exist_ok=True)
         
-        # Ensure tesseract is available (required for OCR)
+        # Ensure tesseract is available (used as backup for OCR)
         if not self._check_tesseract():
-            print("⚠️ Warning: Tesseract OCR not found. Text extraction will be disabled.")
+            print("⚠️ Warning: Tesseract OCR not found. Falling back to vision model for text extraction.")
     
     def _check_tesseract(self) -> bool:
         """Check if tesseract is installed and accessible."""
@@ -41,6 +44,65 @@ class ScreenshotAgent(BaseAgent):
             return True
         except Exception:
             return False
+    
+    async def analyze_image(self, image_path: str, query: str = "") -> str:
+        """Analyze a shared image.
+        
+        Args:
+            image_path: Path to the image file
+            query: Optional query to guide the analysis
+            
+        Returns:
+            Analysis results including content description
+        """
+        try:
+            # Verify the image exists
+            if not os.path.exists(image_path):
+                return f"Could not find image at: {image_path}"
+            
+            # Copy image to shared directory for organization
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"shared_{timestamp}{Path(image_path).suffix}"
+            filepath = self.shared_dir / filename
+            
+            # Copy the image
+            with open(image_path, 'rb') as src, open(filepath, 'wb') as dst:
+                dst.write(src.read())
+            
+            # Analyze content with specific query if provided
+            if query:
+                messages = create_image_message(query, str(filepath), detail="high")
+            else:
+                messages = create_image_message(
+                    """Analyze this image and provide a detailed description. Include:
+                    1. Main subjects or focus of the image
+                    2. Important details and context
+                    3. Any text content if present
+                    4. Notable visual elements or patterns
+                    5. Overall mood or style if relevant
+                    Be specific but concise.""",
+                    str(filepath),
+                    detail="high"
+                )
+            
+            response = self.client.chat.completions.create(
+                model=self.config["model"],
+                messages=[{"role": "user", "content": messages}],
+                max_tokens=500
+            )
+            
+            description = response.choices[0].message.content.strip()
+            
+            # Prepare response
+            return f"""🔍 I've analyzed the image. Here's what I see:
+
+{description}
+
+The image has been saved to: {filepath}"""
+            
+        except Exception as e:
+            print(f"❌ Error analyzing image: {str(e)}")
+            return f"Could not analyze the image: {str(e)}"
     
     async def capture_screen(self, region=None) -> tuple[Path, str]:
         """Capture a screenshot of the screen or specified region.
@@ -67,11 +129,9 @@ class ScreenshotAgent(BaseAgent):
             screenshot.save(filepath)
             print(f"📸 Screenshot saved to {filepath}")
             
-            # Extract text if tesseract is available
-            text = ""
-            if self._check_tesseract():
-                text = pytesseract.image_to_string(screenshot)
-                print("📝 Text extracted from screenshot")
+            # Extract text using vision model
+            text = await self._extract_text(filepath)
+            print("📝 Text extracted from screenshot")
             
             return filepath, text
             
@@ -79,37 +139,41 @@ class ScreenshotAgent(BaseAgent):
             print(f"❌ Error capturing screenshot: {str(e)}")
             return None, ""
     
-    async def analyze_content(self, image_path: Path) -> str:
-        """Analyze the content of a screenshot and provide a description.
+    async def _extract_text(self, image_path: Path) -> str:
+        """Extract text from an image using vision model with OCR fallback.
         
         Args:
             image_path: Path to the image file
             
         Returns:
-            Description of the image content
+            Extracted text from the image
         """
         try:
-            # Extract text from image
-            image = Image.open(image_path)
-            text = pytesseract.image_to_string(image) if self._check_tesseract() else ""
+            # First try using vision model
+            messages = create_image_message(
+                "Extract and return all text visible in this image. Return only the extracted text, nothing else.",
+                str(image_path),
+                detail="high"
+            )
             
-            # Get image properties
-            width, height = image.size
+            response = self.client.chat.completions.create(
+                model=self.config["model"],
+                messages=[{"role": "user", "content": messages}],
+                max_tokens=1000
+            )
             
-            # Prepare prompt for content analysis
-            prompt = f"""Analyze this screenshot and provide a clear description.
-            Image dimensions: {width}x{height}
-            Extracted text: {text}
+            vision_text = response.choices[0].message.content.strip()
             
-            Describe the content, layout, and any notable elements visible in the screenshot."""
+            # If vision model fails or returns no text, try tesseract as backup
+            if not vision_text and self._check_tesseract():
+                image = Image.open(image_path)
+                vision_text = pytesseract.image_to_string(image)
             
-            # Use base agent to analyze content
-            description = await self.process(prompt)
-            return description
+            return vision_text
             
         except Exception as e:
-            print(f"❌ Error analyzing screenshot: {str(e)}")
-            return "Could not analyze screenshot content."
+            print(f"❌ Error extracting text: {str(e)}")
+            return ""
     
     async def process_screen_content(self, query: str = "") -> str:
         """Capture and process screen content based on the query.
@@ -118,27 +182,30 @@ class ScreenshotAgent(BaseAgent):
             query: Optional query to guide the analysis
             
         Returns:
-            Analysis results including extracted text and content description
+            Analysis results including content description
         """
         # Capture screenshot
         filepath, text = await self.capture_screen()
         if not filepath:
             return "Failed to capture screenshot."
         
-        # Analyze content
-        description = await self.analyze_content(filepath)
+        # Analyze content with specific query if provided
+        if query:
+            messages = create_image_message(query, str(filepath), detail="high")
+            response = self.client.chat.completions.create(
+                model=self.config["model"],
+                messages=[{"role": "user", "content": messages}],
+                max_tokens=500
+            )
+            description = response.choices[0].message.content.strip()
+        else:
+            description = await self.analyze_content(filepath)
         
         # Prepare response
-        response = f"""📸 Screenshot captured and analyzed:
-        
-Location: {filepath}
+        response = f"""📸 I've captured and analyzed your screen. Here's what I see:
 
-📝 Extracted Text:
-{text if text.strip() else '(No text detected)'}
-
-🔍 Content Analysis:
 {description}
 
-The screenshot has been saved and can be referenced later."""
+The screenshot has been saved to: {filepath}"""
         
         return response 
