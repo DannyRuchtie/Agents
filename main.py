@@ -12,7 +12,7 @@ from agents.search_agent import SearchAgent
 from agents.code_agent import CodeAgent
 from agents.base_agent import BaseAgent
 
-# Load environment variables from .env file as fallback
+# Load environment variables from .env file
 load_dotenv()
 
 def get_api_key() -> str:
@@ -25,7 +25,7 @@ def get_api_key() -> str:
         )
     return api_key
 
-# Set up OpenAI API key
+# Set up OpenAI API key from environment
 os.environ["OPENAI_API_KEY"] = get_api_key()
 
 MASTER_SYSTEM_PROMPT = """You are the coordinator of a team of AI agents. Your role is to:
