@@ -52,7 +52,7 @@ def create_image_message(text: str, image_paths: Union[str, List[str]], detail: 
     return content
 
 # Default model settings
-DEFAULT_MODEL = "gpt-4o"  # Using the latest GPT-4 Optimized model
+DEFAULT_MODEL = "gpt-4o-mini"  # Using GPT-4 Optimized Mini model
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "model": DEFAULT_MODEL,
