@@ -11,6 +11,7 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 - 🌐 **Combine Local & Web Resources**: Seamlessly blend local knowledge with web-sourced information
 - 🎯 **Provide Contextual Assistance**: Understand your location, schedule, and preferences to offer more relevant help
 - 🔐 **Prioritize Privacy**: Keep sensitive information local and secure
+- 🎤 **Natural Voice Interaction**: Wake word detection and continuous conversation support
 
 ## Core Features
 
@@ -22,11 +23,12 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 - **Scanner Agent**: Document vectorization and semantic search
 - **Vision Agent**: Image analysis and screen content understanding
 - **Location Agent**: Location-aware services and recommendations
-- **Speech Agent**: Natural voice interaction
+- **Speech Agent**: Natural voice interaction with customizable voices and speeds
 - **Learning Agent**: System improvement through usage analysis
 
 ### 🎯 Key Capabilities
-- Voice interaction with customizable voices
+- Voice interaction with wake word detection
+- Customizable voices and speech settings
 - Calendar and reminder management
 - Document analysis and semantic search
 - Screen capture and image analysis
@@ -39,6 +41,7 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 ### Prerequisites
 - Python 3.11 or higher
 - OpenAI API key
+- Picovoice API key (for wake word detection)
 - macOS (for full feature compatibility)
 
 ### Installation
@@ -62,7 +65,7 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 4. Set up your environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env with your OpenAI API key
+   # Edit .env with your OpenAI API key and Picovoice key
    ```
 
 ### Running the Assistant
@@ -70,39 +73,65 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 python main.py
 ```
 
-## Usage Examples
+## Voice Interaction Guide
 
-### Voice Interaction
-```
-"speak to me" - Enable voice output
-"use echo voice" - Change voice style
-"stop talking" - Disable voice output
+### Wake Word Detection
+The assistant listens for the wake word "computer" before accepting commands. You can:
+1. Say "computer" to activate listening mode
+2. Speak your command when you see "Listening..."
+3. Wait for the response or continue with more commands
+
+### Voice Settings
+```bash
+# List available voices
+list voices
+
+# Change voice
+set voice [name]  # Available: nova, echo, onyx, alloy, fable, shimmer
+
+# Adjust speech speed
+set speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
+
+# Enable/disable continuous listening
+continuous listening [on/off]
+
+# Adjust listening timeouts
+set wait timeout [seconds]    # Time to wait for speech to start
+set phrase timeout [seconds]  # Maximum duration of a command
 ```
 
-### Calendar Management
+### Voice Commands
+The assistant supports natural language commands. Examples:
 ```
-"what's on my calendar today?"
-"create a meeting for tomorrow at 2pm"
-"show my schedule for next week"
-```
-
-### Document Analysis
-```
-"analyze document.pdf what is the main topic?"
-"summarize the key points from last_meeting.txt"
+"computer, what's the weather like?"
+"computer, search for latest AI news"
+"computer, summarize this document"
+"computer, take a screenshot"
 ```
 
-### Screen Interaction
+### Continuous Conversation Mode
+Enable continuous listening to have natural back-and-forth conversations:
+1. Say "continuous listening on"
+2. Start with "computer" once
+3. Continue speaking commands without the wake word
+4. Say "stop listening" to exit continuous mode
+
+## Personality Settings
+
+The assistant's personality can be customized:
+```bash
+# Adjust humor level (0.0 to 1.0)
+set humor 0.7
+
+# Set formality level (0.0 to 1.0)
+set formality 0.3
+
+# Toggle personality traits
+toggle trait [witty/empathetic/curious/enthusiastic]
+
+# Control emoji usage
+toggle emoji [on/off]
 ```
-"screenshot" - Capture screen
-"what's on my screen?" - Analyze current display
-```
-
-## Why It Matters
-
-In a world where AI capabilities are increasingly centralized in the cloud, this project takes a different approach. It brings AI capabilities to your local environment, allowing for deeper integration with your daily workflow while maintaining privacy and control. The multi-agent architecture means each specialized task is handled by an expert system, leading to more accurate and contextual responses.
-
-The system's ability to learn from interactions and maintain memory means it becomes more personalized over time, understanding your preferences and patterns. This isn't just about having a chat interface – it's about having a genuine digital assistant that understands your context and can take meaningful actions on your behalf.
 
 ## Security Notes
 
@@ -110,6 +139,7 @@ The system's ability to learn from interactions and maintain memory means it bec
 - All document processing happens on your machine
 - Memory storage is local and under your control
 - Web access is configurable and can be restricted
+- Voice data is processed locally except for speech-to-text conversion
 
 ## Contributing
 
@@ -117,11 +147,13 @@ This is an evolving project, and contributions are welcome! Whether it's adding 
 
 ## Future Roadmap
 
-- [ ] Additional specialized agents for specific tasks
-- [ ] Enhanced cross-agent collaboration
-- [ ] Improved memory management and context understanding
-- [ ] More sophisticated learning capabilities
-- [ ] Extended platform support beyond macOS
+- [ ] Additional wake word options
+- [ ] Custom wake word training
+- [ ] Offline speech-to-text support
+- [ ] Multi-language support
+- [ ] Enhanced voice activity detection
+- [ ] Voice profile customization
+- [ ] Improved continuous conversation handling
 
 ## License
 
