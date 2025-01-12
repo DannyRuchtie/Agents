@@ -405,12 +405,23 @@ class MasterAgent(BaseAgent):
             
             # Handle image/document analysis
             if image_path:
-                if Path(image_path).suffix.lower() == '.pdf':
-                    print("📄 Processing PDF document...")
-                    context_data["scanner"] = await self.scanner_agent.process_documents(query)
-                else:
-                    print("🔍 Analyzing image...")
+                # Determine file type from extension
+                file_ext = Path(image_path).suffix.lower()
+                
+                # Document types
+                document_types = ['.pdf', '.txt', '.md', '.doc', '.docx']
+                image_types = ['.png', '.jpg', '.jpeg', '.gif', '.webp']
+                
+                if file_ext in document_types:
+                    print(f"📄 Processing document: {file_ext}")
+                    context_data["scanner"] = await self.scanner_agent.process_documents(image_path)
+                elif file_ext in image_types:
+                    print(f"🖼️ Analyzing image: {file_ext}")
                     context_data["vision"] = await self.vision_agent.analyze_image(image_path, query)
+                else:
+                    return f"Unsupported file type: {file_ext}. Supported types:\nDocuments: {', '.join(document_types)}\nImages: {', '.join(image_types)}"
+                    
+            # Handle screenshot requests
             elif "vision" in selected_agents and "screenshot" in query_lower:
                 print("📸 Taking screenshot...")
                 context_data["vision"] = await self.vision_agent.process_screen_content(query)
