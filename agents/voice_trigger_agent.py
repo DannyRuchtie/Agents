@@ -14,7 +14,7 @@ import struct
 class VoiceTriggerAgent(BaseAgent):
     """Agent that handles wake word detection and speech recognition."""
     
-    def __init__(self, on_command_callback: Callable[[str], None]):
+    def __init__(self, on_command_callback: Callable[[str], None], speech_agent: Optional[SpeechAgent] = None):
         """Initialize the voice trigger agent."""
         super().__init__("voice_trigger")
         self.recognizer = sr.Recognizer()
@@ -31,8 +31,7 @@ class VoiceTriggerAgent(BaseAgent):
         self.porcupine = None
         self.audio = None
         self.thread = None
-        self.speech_agent = SpeechAgent()
-        self.speech_agent.enable_speech()
+        self.speech_agent = speech_agent  # Use provided speech agent
         
         # Initialize event loop in the main thread
         try:
@@ -52,27 +51,26 @@ class VoiceTriggerAgent(BaseAgent):
                 # Remove debug markers and system messages
                 cleaned_response = self._clean_response(response)
                 print(f"Speaking response: {cleaned_response}")
-                # Ensure speech is enabled and speak the response
-                self.speech_agent.enable_speech()  # Make sure speech is enabled
-                await self.speech_agent.speak(cleaned_response)
+                # Ensure speech agent exists and speech is enabled
+                if self.speech_agent and self.speech_agent.is_speech_enabled():
+                    await self.speech_agent.speak(cleaned_response)
+                else:
+                    print("Speech is not enabled. Enable it with 'enable speech'")
             else:
                 print("No response to speak")
         except Exception as e:
             error_msg = "I'm sorry, I encountered an error processing your request."
             print(f"Error: {str(e)}")
-            await self.speech_agent.speak(error_msg)
+            if self.speech_agent and self.speech_agent.is_speech_enabled():
+                await self.speech_agent.speak(error_msg)
     
     def _handle_command_sync(self, command: str) -> None:
         """Handle command in synchronous context by running it in the event loop."""
         if self.loop and command:
-            future = asyncio.run_coroutine_threadsafe(
+            asyncio.run_coroutine_threadsafe(
                 self.process_command(command),
                 self.loop
             )
-            try:
-                future.result(timeout=30)  # Wait for completion with timeout
-            except Exception as e:
-                print(f"Error executing command: {str(e)}")
     
     def set_timeouts(self, wait_timeout: int = None, phrase_timeout: int = None) -> str:
         """Set the listening timeouts.
