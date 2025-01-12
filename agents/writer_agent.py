@@ -31,37 +31,22 @@ class WriterAgent(BaseAgent):
             system_prompt=WRITER_SYSTEM_PROMPT,
         )
     
-    async def expand(self, query: str, context: Optional[str] = None) -> str:
-        """Expand on a topic or create a document based on the query.
-        
-        Args:
-            query: The writing request
-            context: Optional additional context
+    async def expand(self, query: str, context: str) -> str:
+        """Expand a query with given context into a well-written response."""
+        # If we have search results, don't override them
+        if "Here's what I found" in context:
+            return context
             
-        Returns:
-            Generated text or document
-        """
-        # Check if this is a document creation request
-        should_save = "@Desktop" in query
-        
-        # Prepare the prompt
+        # For other responses, process normally
         prompt = (
-            "Write a response to this request. If '@Desktop' is included, format the response "
-            "in clean markdown, starting with a # Title that summarizes the content.\n\n"
+            f"Using the following context, create a clear and helpful response to the query.\n\n"
+            f"Query: {query}\n\n"
+            f"Context:\n{context}\n\n"
+            f"Response:"
         )
-        if context:
-            prompt += f"Context:\n{context}\n\n"
-        prompt += f"Request: {query}"
         
-        # Generate the content
-        content = await self.process(prompt)
-        
-        # If requested to save to desktop, write to a markdown file
-        if should_save:
-            await self._save_to_desktop(content, query)
-            return f"I've written your document and saved it to your desktop. Here's what I created:\n\n{content}"
-        
-        return content
+        response = await self.process(prompt)
+        return response.strip()
     
     async def _save_to_desktop(self, content: str, query: str) -> None:
         """Save the content to a markdown file on the desktop.

@@ -40,8 +40,13 @@ build/
 *.egg-info/
 *.pyc
 /agents/__pycache__
-/screenshots
-/shared_images
-/venv
-/vectorstore
-/venv/lib
+
+# Agents docs directories
+/agents_docs/screenshots/
+/agents_docs/shared_images/
+/agents_docs/speech_output/
+/agents_docs/vectorstore/
+/agents_docs/learning_data/temp/
+/agents_docs/static/temp/
+*.temp
+*.tmp

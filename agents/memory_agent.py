@@ -5,8 +5,7 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Any
 from .base_agent import BaseAgent
-
-MEMORY_FILE = "memory.json"
+from config.paths_config import get_path, AGENTS_DOCS_DIR
 
 class MemoryAgent(BaseAgent):
     def __init__(self):
@@ -14,11 +13,12 @@ class MemoryAgent(BaseAgent):
             agent_type="memory",
             system_prompt="You are a memory management expert."
         )
+        self.memory_file = AGENTS_DOCS_DIR / "memory.json"
         self.memories = self._load_memories()
 
     def _load_memories(self) -> Dict[str, Any]:
-        if os.path.exists(MEMORY_FILE):
-            with open(MEMORY_FILE, 'r') as f:
+        if self.memory_file.exists():
+            with open(self.memory_file, 'r') as f:
                 try:
                     memories = json.load(f)
                     # Ensure all required categories exist
@@ -131,7 +131,7 @@ class MemoryAgent(BaseAgent):
     def _save_memories(self) -> None:
         """Save memories to file."""
         try:
-            with open(MEMORY_FILE, 'w') as f:
+            with open(self.memory_file, 'w') as f:
                 json.dump(self.memories, f, indent=2)
         except Exception as e:
             print(f"Error saving memories: {str(e)}")

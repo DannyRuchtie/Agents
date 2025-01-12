@@ -9,6 +9,7 @@ from PIL import Image
 import numpy as np
 from .base_agent import BaseAgent
 from config.openai_config import create_image_message
+from config.paths_config import get_path
 
 VISION_SYSTEM_PROMPT = """You are a specialized Vision Agent that analyzes visual content.
 Your tasks include:
@@ -28,10 +29,8 @@ class VisionAgent(BaseAgent):
             agent_type="vision",  # Use vision-specific configuration
             system_prompt=VISION_SYSTEM_PROMPT,
         )
-        self.screenshots_dir = Path("screenshots")
-        self.screenshots_dir.mkdir(exist_ok=True)
-        self.shared_dir = Path("shared_images")
-        self.shared_dir.mkdir(exist_ok=True)
+        self.screenshots_dir = get_path('screenshots')
+        self.shared_dir = get_path('shared_images')
         
         # Ensure tesseract is available (used as backup for OCR)
         if not self._check_tesseract():

@@ -27,17 +27,23 @@ class SearchAgent(BaseAgent):
         Returns:
             A list of relevant search results
         """
-        # First, use the LLM to optimize the search query
-        response = await self.process(
-            f"Optimize this search query for web search by extracting and reformulating "
-            f"the key concepts. Make it concise and focused:\n{query}"
-        )
+        # Add specific search modifiers for personal searches
+        if any(name in query.lower() for name in ["danny ruchtie", "danny", "ruchtie"]):
+            # Add specific terms to find personal/professional info
+            search_query = f"{query} (linkedin OR github OR profile OR about OR professional OR developer)"
+        else:
+            # For non-personal searches, optimize the query
+            response = await self.process(
+                f"Optimize this search query for web search by extracting and reformulating "
+                f"the key concepts. Make it concise and focused:\n{query}"
+            )
+            search_query = response
         
         try:
             # Perform the web search
             results = []
             for r in self.search_client.text(
-                response,
+                search_query,
                 max_results=5  # Limit to top 5 results
             ):
                 if r.get('body'):

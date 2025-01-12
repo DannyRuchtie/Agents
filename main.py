@@ -16,6 +16,7 @@ from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
 from agents.speech_agent import SpeechAgent
 from agents.learning_agent import LearningAgent
+from config.paths_config import ensure_directories, AGENTS_DOCS_DIR
 
 # Load environment variables from .env file
 load_dotenv()
@@ -132,25 +133,54 @@ class MasterAgent(BaseAgent):
     
     async def _check_memory(self, query: str) -> List[str]:
         """Check memory for relevant information."""
+        results = []
+        query_lower = query.lower()
+        
         # Store personal information if it contains name
-        if "my name is" in query.lower():
-            await self.memory_agent.store("personal", query)
+        if "my name is" in query_lower:
+            name = query_lower.split("my name is")[-1].strip()
+            await self.memory_agent.store("personal", f"Name: {name}")
+            
+        # Store preferences if detected
+        if any(word in query_lower for word in ["i like", "i prefer", "i enjoy", "i want"]):
+            await self.memory_agent.store("preferences", query)
             
         # Store family information if detected
-        if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children"]):
+        if any(word in query_lower for word in ["son", "daughter", "wife", "husband", "children", "family"]):
             await self.memory_agent.store("contacts", query, "family")
-            
-        # For queries about family members, retrieve from contacts/family
-        if any(word in query.lower() for word in ["son", "daughter", "wife", "husband", "children", "family"]):
-            return await self.memory_agent.retrieve("contacts", query, "family")
-            
-        # For other queries, try retrieving from personal and system history
-        results = []
+        
         try:
+            # Check if this is an identity query
+            identity_indicators = ["who am i", "my name", "about me", "do you know", "tell me about myself"]
+            if any(indicator in query_lower for indicator in identity_indicators):
+                # Only get verified personal information
+                personal_info = await self.memory_agent.retrieve("personal", None)
+                preferences = await self.memory_agent.retrieve("preferences", None)
+                family = await self.memory_agent.retrieve("contacts", None, "family")
+                
+                # Filter out search results
+                personal_info = [info for info in personal_info if not info.startswith("Found online:")]
+                
+                results.extend(personal_info)
+                results.extend(preferences)
+                results.extend(family)
+                return results
+            
+            # For family-specific queries
+            if any(word in query_lower for word in ["son", "daughter", "wife", "husband", "children", "family"]):
+                family_info = await self.memory_agent.retrieve("contacts", query, "family")
+                results.extend(family_info)
+            
+            # For preference-specific queries
+            if any(word in query_lower for word in ["like", "prefer", "enjoy", "want"]):
+                preferences = await self.memory_agent.retrieve("preferences", query)
+                results.extend(preferences)
+            
+            # Get relevant personal info but filter out search results
             personal_info = await self.memory_agent.retrieve("personal", query)
-            system_history = await self.memory_agent.retrieve("system", query, "history")
+            personal_info = [info for info in personal_info if not info.startswith("Found online:")]
             results.extend(personal_info)
-            results.extend(system_history)
+            
         except Exception as e:
             print(f"Memory retrieval warning: {str(e)}")
         
@@ -160,11 +190,45 @@ class MasterAgent(BaseAgent):
         """Perform web search with error handling."""
         try:
             print("🌐 Searching the web for information...")
+            # For personal searches, add more specific terms
+            if "me" in query.lower():
+                name = None
+                # Try to get name from memory
+                personal_info = await self.memory_agent.retrieve("personal", "name")
+                for info in personal_info:
+                    if info.startswith("Name:"):
+                        name = info.split("Name:")[-1].strip()
+                        break
+                
+                if name:
+                    query = name  # Use the actual name for search
+                    print(f"🔍 Searching for: {name}")
+                else:
+                    return ["I need to know your name before I can search for information about you. Please tell me your name first."]
+            
+            # Clean up the query
+            query = query.strip()
+            if not query:
+                return ["Please provide a search query."]
+                
             results = await self.search_agent.search(query)
-            if results and results[0].startswith("I encountered an error"):
+            
+            # Filter out generic or irrelevant results
+            filtered_results = []
+            for result in results:
+                # Skip results about search engines or generic topics
+                if any(term in result.lower() for term in ["search query", "search engine", "seo", "keyword"]):
+                    continue
+                filtered_results.append(result)
+            
+            if filtered_results:
+                return filtered_results
+            elif results:
+                return results  # Return original results if all were filtered
+            else:
                 print("⚠️  Search encountered an issue - using context from memory only")
                 return []
-            return results
+                
         except Exception as e:
             print(f"⚠️  Search error: {str(e)} - using context from memory only")
             return []
@@ -173,6 +237,14 @@ class MasterAgent(BaseAgent):
         """Select which agents to use based on the query."""
         agents = []
         query = query.lower()
+        
+        # Memory and personal information triggers
+        memory_indicators = [
+            "remember", "recall", "memory", "forget",
+            "who am i", "my name", "about me", "do you know",
+            "tell me about myself", "what do you know",
+            "family", "preference", "like", "dislike"
+        ]
         
         # Search triggers
         search_indicators = [
@@ -191,11 +263,11 @@ class MasterAgent(BaseAgent):
         if any(word in query for word in ["screenshot", "capture screen", "what do you see"]):
             agents.append("vision")
             
-        # Memory queries
-        if any(word in query for word in ["remember", "recall", "memory", "forget"]):
+        # Memory queries - check first as personal context is important
+        if any(indicator in query for indicator in memory_indicators):
             agents.append("memory")
             
-        # Search queries - check first as it might be needed alongside other agents
+        # Search queries - check after memory as we might need both
         if any(indicator in query for indicator in search_indicators):
             agents.append("search")
             
@@ -208,7 +280,7 @@ class MasterAgent(BaseAgent):
             agents.append("scanner")
         
         # Add writer agent for response composition if we have search results
-        if "search" in agents:
+        if "search" in agents or "memory" in agents:
             agents.append("writer")
         # Default to writer agent if no specific agents selected
         elif not agents:
@@ -219,6 +291,65 @@ class MasterAgent(BaseAgent):
     async def process(self, query: str, image_path: Optional[str] = None) -> str:
         """Process a user query and coordinate agent responses."""
         query_lower = query.lower().strip()
+        
+        # Handle search requests
+        if any(term in query_lower for term in ["search online", "search for", "look up", "find information about"]):
+            print("🔍 Performing online search...")
+            # Extract search terms
+            search_terms = query_lower
+            for remove in ["search online", "search for", "look up", "find information about", "about", "for"]:
+                search_terms = search_terms.replace(remove, "").strip()
+            
+            if not search_terms:
+                return "What would you like me to search for?"
+            
+            # Perform the search
+            search_results = await self._perform_search(search_terms)
+            
+            if search_results:
+                # If this is a personal search, store in memory
+                if "me" in query_lower or search_terms in query_lower:
+                    for result in search_results:
+                        await self.memory_agent.store("personal", f"Found online: {result}")
+                    
+                # Format and return the response
+                response = f"Here's what I found about {search_terms}:\n\n"
+                for result in search_results:
+                    response += f"• {result}\n"
+                if "me" in query_lower:
+                    response += "\nI've saved this information to memory."
+                return response
+            else:
+                return f"I couldn't find any relevant information online about {search_terms}. Please try a different search query."
+        
+        # Check if this is a personal information search request
+        if any(term in query_lower for term in ["about me", "my details", "search me", "find me"]):
+            print("🔍 Searching for personal information...")
+            # Extract name or search terms
+            name = None
+            for word in query_lower.split():
+                if word not in ["search", "about", "me", "my", "details", "find", "and", "save", "it"]:
+                    name = word
+            
+            if not name:
+                return "I need a name to search for. Please provide your name in the query."
+            
+            # Perform the search
+            search_results = await self._perform_search(name)
+            
+            if search_results:
+                # Store relevant information in memory
+                for result in search_results:
+                    await self.memory_agent.store("personal", f"Found online: {result}")
+                
+                # Format and return the response
+                response = "Here's what I found about you online:\n\n"
+                for result in search_results:
+                    response += f"• {result}\n"
+                response += "\nI've saved this information to memory."
+                return response
+            else:
+                return "I couldn't find any relevant information online. Please try a different search query."
         
         # Learning-specific commands
         if query_lower == "show improvements":
@@ -242,6 +373,23 @@ class MasterAgent(BaseAgent):
                 "vision": None,
                 "scanner": None
             }
+            
+            # Check for identity or personal information queries first
+            identity_indicators = ["who am i", "my name", "about me", "do you know", "tell me about myself"]
+            if any(indicator in query_lower for indicator in identity_indicators):
+                print("👤 Retrieving personal information...")
+                memory_results = await self._check_memory(query)
+                if memory_results:
+                    # Format personal information response
+                    personal_response = "Based on what you've shared with me:\n\n"
+                    for info in memory_results:
+                        if info.startswith("I like") or info.startswith("I prefer"):
+                            personal_response += f"• {info}\n"
+                        elif "name is" in info.lower():
+                            personal_response += f"• Your name: {info.split('name is')[-1].strip()}\n"
+                        else:
+                            personal_response += f"• {info}\n"
+                    return personal_response.strip() or "I don't have any personal information stored yet. Feel free to share details about yourself!"
             
             # Gather context from memory first
             print("📚 Checking memory context...")
@@ -338,10 +486,15 @@ class MasterAgent(BaseAgent):
         
         return any(pattern in query_lower for pattern in follow_up_patterns)
 
-
 async def chat_interface():
     """Run the chat interface."""
     print("\n🤖 Initializing AI Agents...")
+    
+    # Ensure directories exist
+    print("\n📁 Checking directories...")
+    ensure_directories()
+    print(f"✓ Using data directory: {AGENTS_DOCS_DIR}")
+    
     master = MasterAgent()
     
     print("\n🌟 Welcome to the Multi-Agent Chat Interface!")

@@ -7,6 +7,7 @@ from typing import Optional
 import pygame
 
 from .base_agent import BaseAgent
+from config.paths_config import get_path
 
 SPEECH_SYSTEM_PROMPT = """You are a Speech Agent responsible for converting text to natural-sounding speech.
 Focus on clear and engaging voice synthesis."""
@@ -20,6 +21,7 @@ class SpeechAgent(BaseAgent):
             agent_type="speech",
             system_prompt=SPEECH_SYSTEM_PROMPT,
         )
+        self.speech_dir = get_path('speech_output')
         self.voice = "alloy"  # Default voice
         self.auto_play = True  # Default to auto-play enabled
         pygame.mixer.init()
