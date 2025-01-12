@@ -79,13 +79,33 @@ class ScannerAgent:
         """Extract text content from a PDF file."""
         try:
             reader = PdfReader(file_path)
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() + "\n"
-            return text
+            text = []
+            print(f"Processing PDF with {len(reader.pages)} pages...")
+            
+            for i, page in enumerate(reader.pages):
+                try:
+                    content = page.extract_text()
+                    if content.strip():
+                        text.append(content)
+                    print(f"✓ Processed page {i+1}")
+                except Exception as e:
+                    print(f"⚠️ Error on page {i+1}: {str(e)}")
+                    continue
+            
+            if not text:
+                return "PDF appears to be empty or unreadable."
+                
+            return "\n\n".join(text)
+            
         except Exception as e:
-            print(f"Error extracting text from PDF: {e}")
-            return ""
+            error_msg = str(e)
+            print(f"Error extracting text from PDF: {error_msg}")
+            if "file has not been decrypted" in error_msg.lower():
+                return "This PDF is encrypted and cannot be read. Please provide a decrypted version."
+            elif "file exists" in error_msg.lower():
+                return "Could not access the PDF file. Please check if the file exists and you have permission to read it."
+            else:
+                return f"Error reading PDF: {error_msg}"
 
     def process_document(self, file_path: str) -> bool:
         """Process a document and add it to the vector store."""
@@ -140,13 +160,38 @@ class ScannerAgent:
             print(f"Error processing document {file_path}: {e}")
             return False
 
-    async def process_documents(self, file_path: str) -> bool:
-        """Process a document file directly without copying to documents directory."""
-        if not os.path.exists(file_path):
-            print(f"File not found: {file_path}")
-            return False
+    async def process_documents(self, file_path: str) -> str:
+        """Process a document file and return its content with analysis.
+        
+        Args:
+            file_path: Path to the document file
             
-        return self.process_document(file_path)
+        Returns:
+            A string containing the document content and analysis
+        """
+        if not os.path.exists(file_path):
+            return f"File not found: {file_path}"
+            
+        try:
+            # Extract text based on file type
+            if file_path.lower().endswith('.pdf'):
+                content = self._extract_text_from_pdf(file_path)
+            else:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            
+            if not content.strip():
+                return f"No readable content found in {file_path}"
+            
+            # Process for vector store in background
+            self.process_document(file_path)
+            
+            # Return content summary
+            return f"Document Content:\n\n{content[:1000]}..." if len(content) > 1000 else content
+            
+        except Exception as e:
+            print(f"Error processing document: {str(e)}")
+            return f"Error processing document: {str(e)}"
 
     def remove_document(self, file_path: str) -> bool:
         """Remove a document from the vector store."""
