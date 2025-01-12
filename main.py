@@ -16,6 +16,7 @@ from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
 from agents.speech_agent import SpeechAgent
 from agents.learning_agent import LearningAgent
+from agents.voice_trigger_agent import VoiceTriggerAgent
 from config.paths_config import ensure_directories, AGENTS_DOCS_DIR
 
 # Load environment variables from .env file
@@ -79,9 +80,26 @@ class MasterAgent(BaseAgent):
     """Master agent that coordinates multiple specialized agents."""
     
     def __init__(self):
+        # Define personality traits and settings
+        self.personality = {
+            "humor_level": 0.5,  # 0.0 to 1.0: serious to very humorous
+            "formality_level": 0.5,  # 0.0 to 1.0: casual to very formal
+            "emoji_usage": True,  # Whether to use emojis in responses
+            "traits": {
+                "witty": True,
+                "empathetic": True,
+                "curious": True,
+                "enthusiastic": True
+            }
+        }
+        
+        # Update system prompt with personality
+        personality_prompt = self._generate_personality_prompt()
+        system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{personality_prompt}"
+        
         super().__init__(
             agent_type="master",
-            system_prompt=MASTER_SYSTEM_PROMPT,
+            system_prompt=system_prompt,
         )
         
         # Initialize sub-agents
@@ -95,6 +113,9 @@ class MasterAgent(BaseAgent):
         self.speech_agent = SpeechAgent()
         self.learning_agent = LearningAgent()
         
+        # Initialize voice trigger agent
+        self.voice_trigger = VoiceTriggerAgent(self.handle_voice_command)
+        
         # Environment and state flags
         self.speech_mode = False
         self.os_type = "macos"  # Running on macOS
@@ -102,6 +123,114 @@ class MasterAgent(BaseAgent):
         self.has_screen_access = True
         self.conversation_depth = 0  # Track conversation depth for a topic
         
+        # Ensure required directories exist
+        ensure_directories()
+        
+    def _generate_personality_prompt(self) -> str:
+        """Generate a personality-specific prompt based on current settings."""
+        humor_desc = {
+            0.0: "serious and professional",
+            0.25: "occasionally humorous",
+            0.5: "balanced with appropriate humor",
+            0.75: "frequently humorous and playful",
+            1.0: "very humorous and witty"
+        }
+        formality_desc = {
+            0.0: "very casual and friendly",
+            0.25: "mostly casual",
+            0.5: "balanced and adaptable",
+            0.75: "mostly formal",
+            1.0: "very formal and professional"
+        }
+        
+        # Find closest humor and formality descriptions
+        humor_level = min(humor_desc.keys(), key=lambda x: abs(x - self.personality["humor_level"]))
+        formality_level = min(formality_desc.keys(), key=lambda x: abs(x - self.personality["formality_level"]))
+        
+        traits_list = [trait for trait, enabled in self.personality["traits"].items() if enabled]
+        
+        return f"""Personality Settings:
+- You are {humor_desc[humor_level]} in your responses
+- Your communication style is {formality_desc[formality_level]}
+- You {"use" if self.personality["emoji_usage"] else "avoid using"} emojis to enhance communication
+- Your key traits are: {", ".join(traits_list)}
+
+Adapt your responses to reflect these personality traits while maintaining professionalism and helpfulness."""
+    
+    def set_humor_level(self, level: float) -> str:
+        """Set the humor level for responses.
+        
+        Args:
+            level: Float between 0.0 (serious) and 1.0 (very humorous)
+        """
+        if not 0.0 <= level <= 1.0:
+            return "❌ Humor level must be between 0.0 (serious) and 1.0 (very humorous)"
+        
+        self.personality["humor_level"] = level
+        # Update system prompt with new personality
+        self.system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{self._generate_personality_prompt()}"
+        
+        responses = {
+            0.0: "I'll keep things strictly professional and serious.",
+            0.25: "I'll add a touch of humor when appropriate.",
+            0.5: "I'll maintain a balanced approach to humor.",
+            0.75: "I'll keep things light and fun while staying helpful.",
+            1.0: "I'll bring out my most playful and witty side! 😄"
+        }
+        
+        # Find closest response
+        closest_level = min(responses.keys(), key=lambda x: abs(x - level))
+        return f"✨ Humor level set to {level:.2f}. {responses[closest_level]}"
+    
+    def toggle_trait(self, trait: str, enabled: bool) -> str:
+        """Toggle a personality trait on or off."""
+        if trait not in self.personality["traits"]:
+            return f"❌ Unknown trait: {trait}. Available traits: {', '.join(self.personality['traits'].keys())}"
+        
+        self.personality["traits"][trait] = enabled
+        # Update system prompt with new personality
+        self.system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{self._generate_personality_prompt()}"
+        
+        return f"✨ Trait '{trait}' {'enabled' if enabled else 'disabled'}"
+    
+    def set_formality(self, level: float) -> str:
+        """Set the formality level for responses."""
+        if not 0.0 <= level <= 1.0:
+            return "❌ Formality level must be between 0.0 (casual) and 1.0 (formal)"
+        
+        self.personality["formality_level"] = level
+        # Update system prompt with new personality
+        self.system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{self._generate_personality_prompt()}"
+        
+        return f"✨ Formality level set to {level:.2f}"
+    
+    def toggle_emoji(self, enabled: bool) -> str:
+        """Toggle emoji usage in responses."""
+        self.personality["emoji_usage"] = enabled
+        # Update system prompt with new personality
+        self.system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{self._generate_personality_prompt()}"
+        
+        return f"{'🎨' if enabled else '✨'} Emoji usage {'enabled' if enabled else 'disabled'}"
+    
+    async def handle_voice_command(self, command: str):
+        """Handle voice commands by processing them and speaking the response."""
+        try:
+            # Process the command
+            response = await self.process(command)
+            
+            # Ensure speech is enabled and speak the response
+            if not self.speech_agent.is_speech_enabled():
+                self.speech_agent.enable_speech()
+            
+            print("\n🤖 Assistant:", response)
+            await self.speech_agent.speak(response)
+            
+        except Exception as e:
+            error_msg = f"Error processing voice command: {str(e)}"
+            print(f"❌ {error_msg}")
+            if self.speech_agent.is_speech_enabled():
+                await self.speech_agent.speak(error_msg)
+    
     def _detect_speech_intent(self, query: str) -> bool:
         """Detect if the user's query implies they want a voice response."""
         query_lower = query.lower().strip()
@@ -498,128 +627,141 @@ class MasterAgent(BaseAgent):
         return any(pattern in query_lower for pattern in follow_up_patterns)
 
 async def chat_interface():
-    """Run the chat interface."""
-    print("\n🤖 Initializing AI Agents...")
+    """Main chat interface loop."""
+    master_agent = MasterAgent()
     
-    # Ensure directories exist
-    print("\n📁 Checking directories...")
-    ensure_directories()
-    print(f"✓ Using data directory: {AGENTS_DOCS_DIR}")
+    # Start voice trigger agent
+    master_agent.voice_trigger.start_listening()
     
-    master = MasterAgent()
-    
-    print("\n🌟 Welcome to the Multi-Agent Chat Interface!")
-    print("Available specialists:")
-    print("  🔍 Search Agent - Searches the web for information")
-    print("  ✍️  Writer Agent - Composes and summarizes text")
-    print("  💻 Code Agent - Generates and explains code")
-    print("  📚 Memory Agent - Stores and retrieves information")
-    print("  📄 Scanner Agent - Manages document vectorization and search")
-    print("  🖼️  Vision Agent - Analyzes images and screen content")
-    print("  📍 Location Agent - Provides current location information")
-    print("  🎙️  Speech Agent - Converts responses to speech")
-    print("  🧠 Learning Agent - Improves system through interaction analysis")
-    
-    print("\nLearning Commands:")
-    print("  📊 'show improvements' - View system learning stats and suggestions")
-    print("  🔄 'apply improvements' - Apply learned improvements to the system")
-    
-    print("\nSpeech Commands:")
-    print("  🎙️ Turn on: 'speak to me', 'voice on', 'start speaking', etc.")
-    print("  🔇 Turn off: 'stop talking', 'voice off', 'be quiet', etc.")
-    print("  🗣️ Change voice: 'use echo voice', 'change to nova', etc.")
-    print("  💬 Direct speech: 'say hello', 'speak this', 'tell me something'")
-    print("  ⚙️ Settings: 'toggle voice' - Turn auto-play on/off")
-    print("\nAvailable voices: alloy, echo, fable, onyx, nova, shimmer")
-    
-    print("\nTo analyze an image, use: analyze <path_to_image> [optional question]")
-    print("To take a screenshot, use: screenshot [optional question]")
-    print("Type 'exit' to end the chat.")
+    print("\n🤖 Welcome to your AI Assistant!")
+    print("\nQuick Start:")
+    print("1. Type your message and press Enter")
+    print("2. Say 'hey computer' to use voice commands")
+    print("3. Type 'help' for more commands")
+    print("4. Type 'exit' to quit")
     
     while True:
         try:
-            # Get user input
-            print("\n👤 You:", end=" ")
-            query = input().strip()
+            user_input = input("\nYou: ").strip()
             
-            # Check for exit command
-            if query.lower() in ['exit', 'quit', 'bye']:
-                print("\n👋 Goodbye! Have a great day!")
+            if user_input.lower() == "exit":
+                # Stop voice trigger before exiting
+                master_agent.voice_trigger.stop_listening()
                 break
             
-            if not query:
+            if user_input.lower() == "help":
+                print("\nAvailable Commands:")
+                print("- Voice Settings:")
+                print("  • 'list voices' - Show available voices and descriptions")
+                print("  • 'set voice [name]' - Change voice (try 'nova' for faster speech)")
+                print("  • 'set speed [0.5-2.0]' - Adjust speech speed")
+                print("  • 'enable/disable speech' - Toggle speech output")
+                print("- Voice Control:")
+                print("  • 'continuous listening [on/off]' - Keep listening after commands")
+                print("  • 'set wait timeout [seconds]' - Time to wait for speech to start")
+                print("  • 'set phrase timeout [seconds]' - Maximum duration of a command")
+                print("- Image: 'analyze image [path]', 'take screenshot'")
+                print("- System: 'show learning stats', 'clear learning data'")
+                print("\nPersonality Settings:")
+                print("- Humor: 'set humor [0-1]' (0: serious, 1: very humorous)")
+                print("- Style: 'set formality [0-1]' (0: casual, 1: formal)")
+                print("- Traits: 'toggle trait [witty/empathetic/curious/enthusiastic]'")
+                print("- Emoji: 'toggle emoji [on/off]'")
                 continue
             
-            # Check if this is an image path with a query
-            if query.startswith(("'", '"')):
-                try:
-                    # Find the closing quote
-                    quote_char = query[0]
-                    end_quote_index = query.find(quote_char, 1)
-                    if end_quote_index != -1:
-                        # Extract path and query
-                        image_path = query[1:end_quote_index].strip()
-                        # Handle paths with spaces and escape characters
-                        image_path = os.path.expanduser(image_path)
-                        image_path = os.path.abspath(image_path)
-                        print(f"\nDebug - Attempting to access file: {image_path}")
-                        
-                        if not os.path.exists(image_path):
-                            response = f"File not found: {image_path}\nPlease check if the file path is correct and that you have permission to access it."
-                        else:
-                            print(f"Debug - File exists: {image_path}")
-                            image_query = query[end_quote_index + 1:].strip() or "Please analyze this document"
-                            response = await master.process(image_query, image_path=image_path)
-                    else:
-                        response = "Invalid format. Please make sure to close the quotes around the file path."
-                except Exception as e:
-                    print(f"\nDebug - Error processing file path: {str(e)}")
-                    response = f"Error processing file path: {str(e)}"
-            # Check if this is an explicit analyze command
-            elif query.lower().startswith("analyze "):
-                remaining = query[8:].strip()
-                if remaining.startswith(("'", '"')):
-                    # Find the closing quote
-                    quote_char = remaining[0]
-                    end_quote_index = remaining.find(quote_char, 1)
-                    if end_quote_index != -1:
-                        # Extract path and query
-                        image_path = remaining[1:end_quote_index].strip()
-                        # Handle paths with spaces and escape characters
-                        image_path = os.path.expanduser(image_path)
-                        image_path = os.path.abspath(image_path)
-                        
-                        if not os.path.exists(image_path):
-                            response = f"File not found: {image_path}\nPlease check if the file path is correct."
-                        else:
-                            image_query = remaining[end_quote_index + 1:].strip()
-                            response = await master.process(image_query, image_path=image_path)
-                    else:
-                        response = "Invalid format. Please make sure to close the quotes around the file path."
-                else:
-                    # Try to split on space if no quotes
-                    parts = remaining.split(None, 1)
-                    image_path = os.path.expanduser(parts[0])
-                    image_path = os.path.abspath(image_path)
-                    
-                    if not os.path.exists(image_path):
-                        response = f"File not found: {image_path}\nPlease check if the file path is correct."
-                    else:
-                        image_query = parts[1] if len(parts) > 1 else ""
-                        response = await master.process(image_query, image_path=image_path)
-            else:
-                # Process the query normally
-                response = await master.process(query)
+            # Handle voice settings
+            if user_input.lower() == "list voices":
+                response = master_agent.speech_agent.list_voices()
+                print(f"\nAssistant: {response}")
+                continue
             
-            print("\n🤖 Assistant:\n")
-            print(response)
+            if user_input.lower().startswith("set voice "):
+                voice = user_input.split()[-1].lower()
+                response = master_agent.speech_agent.set_voice(voice)
+                print(f"\nAssistant: {response}")
+                continue
+            
+            if user_input.lower().startswith("set speed "):
+                try:
+                    speed = float(user_input.split()[-1])
+                    response = master_agent.speech_agent.set_speed(speed)
+                    print(f"\nAssistant: {response}")
+                    continue
+                except ValueError:
+                    print("\nAssistant: ❌ Please provide a number between 0.5 and 2.0")
+                    continue
+            
+            # Handle personality settings
+            if user_input.lower().startswith("set humor "):
+                try:
+                    level = float(user_input.split()[-1])
+                    response = master_agent.set_humor_level(level)
+                    print(f"\nAssistant: {response}")
+                    continue
+                except ValueError:
+                    print("\nAssistant: ❌ Please provide a number between 0 and 1")
+                    continue
+            
+            if user_input.lower().startswith("set formality "):
+                try:
+                    level = float(user_input.split()[-1])
+                    response = master_agent.set_formality(level)
+                    print(f"\nAssistant: {response}")
+                    continue
+                except ValueError:
+                    print("\nAssistant: ❌ Please provide a number between 0 and 1")
+                    continue
+            
+            if user_input.lower().startswith("toggle trait "):
+                trait = user_input.split()[-1].lower()
+                response = master_agent.toggle_trait(trait, True)  # Enable the trait
+                print(f"\nAssistant: {response}")
+                continue
+            
+            if user_input.lower().startswith("toggle emoji "):
+                enabled = user_input.split()[-1].lower() in ["on", "true", "yes", "1"]
+                response = master_agent.toggle_emoji(enabled)
+                print(f"\nAssistant: {response}")
+                continue
+                
+            # Handle voice control settings
+            if user_input.lower().startswith("continuous listening "):
+                enabled = user_input.split()[-1].lower() in ["on", "true", "yes", "1"]
+                response = master_agent.voice_trigger.toggle_continuous_mode(enabled)
+                print(f"\nAssistant: {response}")
+                if enabled:
+                    print("Say 'stop' or 'stop listening' to exit continuous mode")
+                continue
+            
+            if user_input.lower().startswith("set wait timeout "):
+                try:
+                    timeout = int(user_input.split()[-1])
+                    response = master_agent.voice_trigger.set_timeouts(wait_timeout=timeout)
+                    print(f"\nAssistant: {response}")
+                    continue
+                except ValueError:
+                    print("\nAssistant: ❌ Please provide a number of seconds")
+                    continue
+            
+            if user_input.lower().startswith("set phrase timeout "):
+                try:
+                    timeout = int(user_input.split()[-1])
+                    response = master_agent.voice_trigger.set_timeouts(phrase_timeout=timeout)
+                    print(f"\nAssistant: {response}")
+                    continue
+                except ValueError:
+                    print("\nAssistant: ❌ Please provide a number of seconds")
+                    continue
+                
+            response = await master_agent.process(user_input)
+            print(f"\nAssistant: {response}")
             
         except KeyboardInterrupt:
-            print("\n\n👋 Chat ended by user. Goodbye!")
+            # Stop voice trigger on keyboard interrupt
+            master_agent.voice_trigger.stop_listening()
             break
         except Exception as e:
-            print(f"\n❌ An error occurred: {str(e)}")
-            print("Please try again.")
+            print(f"Error: {str(e)}")
 
 
 if __name__ == "__main__":
