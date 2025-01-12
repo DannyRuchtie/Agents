@@ -15,6 +15,7 @@ from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
 from agents.speech_agent import SpeechAgent
+from agents.learning_agent import LearningAgent
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,54 +33,45 @@ def get_api_key() -> str:
 # Set up OpenAI API key from environment
 os.environ["OPENAI_API_KEY"] = get_api_key()
 
-MASTER_SYSTEM_PROMPT = """You are a practical AI assistant running on macOS, designed to help with specific tasks and remember important information. Your core purpose is to:
-1. Help the user accomplish tasks efficiently using your available tools
-2. Remember and use context about the user and their preferences
-3. Provide direct, actionable responses
-4. Stay focused on being helpful rather than conversational
+MASTER_SYSTEM_PROMPT = """You are a highly capable AI coordinator running on macOS, with access to a team of specialized expert agents. Think of yourself as an executive assistant who can delegate tasks to the perfect expert for each job. Your role is to:
+1. Understand user requests and identify which expert(s) would be most helpful
+2. Coordinate between multiple experts when tasks require combined expertise
+3. Maintain continuity and context across interactions
+4. Deliver results in a clear, actionable way
 
-Memory and Context:
-- You maintain memory of user's personal information, preferences, and past interactions
-- You can store and recall information about family members, projects, and settings
-- Use this memory to provide more relevant and personalized responses
-- Proactively mention relevant remembered information when it's helpful
+Your Team of Experts:
+1. Memory Expert (MemoryAgent)
+   - Maintains your personal history and preferences
+   - Recalls past interactions and important details
+   - Helps personalize responses based on what we know about you
 
-Response Style:
-- Default to brief, task-focused responses
-- Avoid unnecessary pleasantries or lengthy explanations
-- Get straight to the point with actionable information
-- Expand only when the user asks for more detail
+2. Communication Experts
+   - Voice Specialist (SpeechAgent): Handles all voice interactions and text-to-speech
+   - Writing Professional (WriterAgent): Crafts well-written content and responses
 
-Available Tools:
-1. 🎙️ Voice Synthesis (OpenAI TTS)
-   - Multiple voices for speech output
-   - Smart voice mode detection
-   - Command-based control
+3. Technical Experts
+   - Code Specialist (CodeAgent): Programming and development assistance
+   - Vision Analyst (VisionAgent): Image analysis and screen interactions
+   - Document Processor (ScannerAgent): Handles document scanning and analysis
 
-2. 📍 Location Services
-   - Current location awareness
-   - Real-time weather information
-   - Local context for responses
+4. Information Specialists
+   - Research Expert (SearchAgent): Web searches and information gathering
+   - Location Advisor (LocationAgent): Location-aware services and weather
+   - Learning Coordinator (LearningAgent): System improvements and adaptations
 
-3. 🖥️ System Integration
-   - Screen capture and analysis
-   - Document scanning and processing
-   - macOS system features
+Working Style:
+- I'll identify which experts are needed for each task
+- Multiple experts may collaborate on complex requests
+- Responses will be focused and practical
+- Context from previous interactions will inform expert recommendations
 
-4. 🔍 Information Tools
-   - Web search capabilities
-   - Code generation and analysis
-   - Document management
-   - Memory storage and retrieval
+When you make a request, I'll:
+1. Analyze which experts are most relevant
+2. Coordinate their inputs as needed
+3. Synthesize a clear, actionable response
+4. Maintain context for future interactions
 
-When responding:
-- Focus on completing the requested task
-- Use the most appropriate tool(s) for the job
-- Leverage stored memory for context
-- Keep responses concise and practical
-- Be direct about what you can and cannot do
-
-Remember: You are a tool to help the user accomplish tasks efficiently, not a conversational companion."""
+Remember: While I coordinate these experts, you don't need to specify which ones you need - I'll handle that automatically based on your request."""
 
 
 class MasterAgent(BaseAgent):
@@ -100,6 +92,7 @@ class MasterAgent(BaseAgent):
         self.vision_agent = VisionAgent()
         self.location_agent = LocationAgent()
         self.speech_agent = SpeechAgent()
+        self.learning_agent = LearningAgent()
         
         # Environment and state flags
         self.speech_mode = False
@@ -190,8 +183,8 @@ class MasterAgent(BaseAgent):
             "information about", "info on"
         ]
         
-        # Location and weather queries
-        if any(word in query for word in ["where", "location", "weather", "temperature", "degrees", "hot", "cold"]):
+        # Location queries
+        if any(word in query for word in ["where", "location", "where am i", "current location"]):
             agents.append("location")
             
         # Screenshot and image analysis
@@ -227,145 +220,109 @@ class MasterAgent(BaseAgent):
         """Process a user query and coordinate agent responses."""
         query_lower = query.lower().strip()
         
-        # Check if this is a follow-up question
-        is_follow_up = self._is_follow_up(query)
-        if is_follow_up:
-            self.conversation_depth += 1
-        else:
-            self.conversation_depth = 0
-        
-        # Handle explicit speech mode commands with fuzzy matching
-        speech_on_patterns = [
-            ("start", ["start", "stat", "begin"]),
-            ("enable", ["enable", "activate"]),
-            ("turn on", ["turn on", "switch on"]),
-            ("voice", ["voice", "speech", "speak", "speaking"])
-        ]
-        
-        speech_off_patterns = [
-            ("stop", ["stop", "end", "halt"]),
-            ("disable", ["disable", "deactivate"]),
-            ("turn off", ["turn off", "switch off"]),
-            ("voice", ["voice", "speech", "speak", "speaking"])
-        ]
-        
-        # Check for speech mode on with fuzzy matching
-        for _, variations in speech_on_patterns:
-            if any(var in query_lower for var in variations):
-                self.speech_mode = True
-                return "🎙️ Speech mode enabled."
-        
-        # Check for speech mode off with fuzzy matching
-        for _, variations in speech_off_patterns:
-            if any(var in query_lower for var in variations):
-                self.speech_mode = False
-                return "🔇 Speech mode disabled."
-        
-        # Voice selection with more natural language
-        if any(word in query_lower for word in ["voice", "speak", "speech"]):
-            for voice in ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]:
-                if voice in query_lower:
-                    return self.speech_agent.set_voice(voice)
+        # Learning-specific commands
+        if query_lower == "show improvements":
+            improvements = await self.learning_agent.get_improvements()
+            return f"System Learning Stats:\n{json.dumps(improvements, indent=2)}"
             
-            # If voice mentioned but no specific voice selected, provide options
-            if any(word in query_lower for word in ["change", "switch", "use", "set"]):
-                return "Available voices: alloy, echo, fable, onyx, nova, shimmer"
+        if query_lower == "apply improvements":
+            return await self.learning_agent.apply_learning()
         
-        # Handle auto-play toggle
-        if any(phrase in query_lower for phrase in ["toggle autoplay", "toggle auto-play", "toggle voice"]):
-            return self.speech_agent.toggle_autoplay()
-        
-        # Check for speech intent in the query
-        if not self.speech_mode and self._detect_speech_intent(query):
-            self.speech_mode = True
-            print("🎙️ Voice response enabled.")
-        
-        print("\n🤔 Processing your request...")
-        
-        # Process the query with appropriate agents
-        if image_path:
-            print("🔍 Analyzing image...")
-            response = await self.vision_agent.analyze_image(image_path, query)
-        else:
-            # For other requests, determine which agents to use
+        try:
+            # Track selected agents for learning
             selected_agents = self._select_agents(query)
+            print(f"\n🔄 Selected agents: {', '.join(selected_agents)}")
             
-            # Check if this is a screenshot request
-            if "vision" in selected_agents and "screenshot" in query.lower():
+            # Initialize context gathering
+            context_data = {
+                "memory": [],
+                "location": None,
+                "search": [],
+                "code": None,
+                "vision": None,
+                "scanner": None
+            }
+            
+            # Gather context from memory first
+            print("📚 Checking memory context...")
+            memory_results = await self._check_memory(query)
+            if memory_results:
+                context_data["memory"] = memory_results
+            
+            # Get location context if needed
+            if "location" in selected_agents:
+                print("📍 Getting location context...")
+                location_info = await self.location_agent.process(query)
+                context_data["location"] = location_info
+            
+            # Handle image/document analysis
+            if image_path:
+                if Path(image_path).suffix.lower() == '.pdf':
+                    print("📄 Processing PDF document...")
+                    context_data["scanner"] = await self.scanner_agent.process_documents(query)
+                else:
+                    print("🔍 Analyzing image...")
+                    context_data["vision"] = await self.vision_agent.analyze_image(image_path, query)
+            elif "vision" in selected_agents and "screenshot" in query_lower:
                 print("📸 Taking screenshot...")
-                response = await self.vision_agent.process_screen_content(query)
-                
-            # Check if this is a location/weather request
-            elif "location" in selected_agents:
-                print("📍 Getting location info...")
-                response = await self.location_agent.process(query)
+                context_data["vision"] = await self.vision_agent.process_screen_content(query)
             
+            # Get search results if needed
+            if "search" in selected_agents:
+                print("🌐 Gathering search information...")
+                search_results = await self._perform_search(query)
+                if search_results:
+                    context_data["search"] = search_results
+            
+            # Get code context if needed
+            if "code" in selected_agents:
+                print("💻 Processing code request...")
+                code_response = await self.code_agent.generate_code(query)
+                if code_response:
+                    context_data["code"] = code_response
+            
+            # Combine all context into a coherent response
+            response_parts = []
+            
+            # Add memory context if relevant
+            if context_data["memory"]:
+                response_parts.append("📚 From your history:\n" + "\n".join(context_data["memory"]))
+            
+            # Add location context
+            if context_data["location"]:
+                response_parts.append(context_data["location"])
+            
+            # Add search results
+            if context_data["search"]:
+                if self.conversation_depth > 0:
+                    response_parts.append("🌐 Related information:\n" + "\n".join(context_data["search"]))
+                else:
+                    response_parts.append("🌐 Key points:\n" + context_data["search"][0])
+            
+            # Add code response
+            if context_data["code"]:
+                response_parts.append("💻 Code solution:\n" + context_data["code"])
+            
+            # Add vision/scanner results
+            if context_data["vision"]:
+                response_parts.append("🖼️ Image analysis:\n" + context_data["vision"])
+            if context_data["scanner"]:
+                response_parts.append("📄 Document analysis:\n" + context_data["scanner"])
+            
+            # Use writer agent to create a coherent response
+            if response_parts:
+                print("✍️ Synthesizing information...")
+                context = "\n\n".join(response_parts)
+                final_response = await self.writer_agent.expand(query, context)
             else:
-                # Process with other agents
-                response_parts = []
-                
-                # Memory check
-                if "memory" in selected_agents:
-                    print("📚 Checking memory...")
-                    memories = await self._check_memory(query)
-                    if memories:
-                        response_parts.append("📚 From memory:\n" + "\n".join(memories))
-                
-                # Search
-                if "search" in selected_agents:
-                    print("🌐 Searching...")
-                    search_results = await self._perform_search(query)
-                    if search_results:
-                        # Limit search results based on conversation depth
-                        if self.conversation_depth > 0:
-                            response_parts.append("🌐 Search results:\n" + "\n".join(search_results))
-                        else:
-                            response_parts.append("🌐 Key points:\n" + search_results[0])
-                
-                # Code generation
-                if "code" in selected_agents:
-                    print("💻 Generating code...")
-                    code_response = await self.code_agent.generate_code(query)
-                    if code_response:
-                        response_parts.append("💻 Code:\n" + code_response)
-                
-                # Document scanning
-                if "scanner" in selected_agents:
-                    print("📄 Processing document...")
-                    scan_response = await self.scanner_agent.process_documents(query)
-                    if scan_response:
-                        response_parts.append("📄 Document analysis:\n" + scan_response)
-                
-                # Writer agent or base processing
-                if "writer" in selected_agents:
-                    print("✍️ Composing response...")
-                    context = "\n\n".join(response_parts) if response_parts else ""
-                    writer_response = await self.writer_agent.expand(query, context)
-                    if writer_response:
-                        # Adjust response based on conversation depth
-                        if self.conversation_depth == 0:
-                            # For initial queries, extract just the key points
-                            lines = writer_response.split('\n')
-                            writer_response = '\n'.join(line for line in lines if line.strip() and not line.startswith('#'))
-                        response_parts.append(writer_response)
-                elif not response_parts:  # If no other responses, use base processing
-                    base_response = await super().process(query)
-                    response_parts.append(base_response)
-                
-                # Combine all responses
-                response = "\n\n".join(response_parts)
-        
-        # Convert to speech if speech mode is enabled or speech intent was detected
-        if self.speech_mode:
-            print("🎙️ Speaking...")
-            await self.speech_agent.text_to_speech(response)
+                # If no specific context, use base processing
+                final_response = await super().process(query)
             
-            # If speech was auto-enabled due to intent, disable it after response
-            if self._detect_speech_intent(query):
-                self.speech_mode = False
-                response += "\n\n(Voice response provided)"
-                
-        return response
+            return final_response
+            
+        except Exception as e:
+            print(f"❌ Error processing request: {str(e)}")
+            return f"I encountered an error while processing your request: {str(e)}"
 
     def _is_follow_up(self, query: str) -> bool:
         """Detect if the query is a follow-up question or shows engagement."""
@@ -395,8 +352,13 @@ async def chat_interface():
     print("  📚 Memory Agent - Stores and retrieves information")
     print("  📄 Scanner Agent - Manages document vectorization and search")
     print("  🖼️  Vision Agent - Analyzes images and screen content")
-    print("  📍 Location Agent - Provides location and weather information")
+    print("  📍 Location Agent - Provides current location information")
     print("  🎙️  Speech Agent - Converts responses to speech")
+    print("  🧠 Learning Agent - Improves system through interaction analysis")
+    
+    print("\nLearning Commands:")
+    print("  📊 'show improvements' - View system learning stats and suggestions")
+    print("  🔄 'apply improvements' - Apply learned improvements to the system")
     
     print("\nSpeech Commands:")
     print("  🎙️ Turn on: 'speak to me', 'voice on', 'start speaking', etc.")
@@ -408,7 +370,6 @@ async def chat_interface():
     
     print("\nTo analyze an image, use: analyze <path_to_image> [optional question]")
     print("To take a screenshot, use: screenshot [optional question]")
-    print("To get weather, use: weather or temperature")
     print("Type 'exit' to end the chat.")
     
     while True:
@@ -427,16 +388,29 @@ async def chat_interface():
             
             # Check if this is an image path with a query
             if query.startswith(("'", '"')):
-                # Find the closing quote
-                quote_char = query[0]
-                end_quote_index = query.find(quote_char, 1)
-                if end_quote_index != -1:
-                    # Extract path and query
-                    image_path = query[1:end_quote_index]
-                    image_query = query[end_quote_index + 1:].strip()
-                    response = await master.process(image_query, image_path=image_path)
-                else:
-                    response = "Invalid format. Please make sure to close the quotes around the file path."
+                try:
+                    # Find the closing quote
+                    quote_char = query[0]
+                    end_quote_index = query.find(quote_char, 1)
+                    if end_quote_index != -1:
+                        # Extract path and query
+                        image_path = query[1:end_quote_index].strip()
+                        # Handle paths with spaces and escape characters
+                        image_path = os.path.expanduser(image_path)
+                        image_path = os.path.abspath(image_path)
+                        print(f"\nDebug - Attempting to access file: {image_path}")
+                        
+                        if not os.path.exists(image_path):
+                            response = f"File not found: {image_path}\nPlease check if the file path is correct and that you have permission to access it."
+                        else:
+                            print(f"Debug - File exists: {image_path}")
+                            image_query = query[end_quote_index + 1:].strip() or "Please analyze this document"
+                            response = await master.process(image_query, image_path=image_path)
+                    else:
+                        response = "Invalid format. Please make sure to close the quotes around the file path."
+                except Exception as e:
+                    print(f"\nDebug - Error processing file path: {str(e)}")
+                    response = f"Error processing file path: {str(e)}"
             # Check if this is an explicit analyze command
             elif query.lower().startswith("analyze "):
                 remaining = query[8:].strip()
@@ -446,17 +420,29 @@ async def chat_interface():
                     end_quote_index = remaining.find(quote_char, 1)
                     if end_quote_index != -1:
                         # Extract path and query
-                        image_path = remaining[1:end_quote_index]
-                        image_query = remaining[end_quote_index + 1:].strip()
-                        response = await master.process(image_query, image_path=image_path)
+                        image_path = remaining[1:end_quote_index].strip()
+                        # Handle paths with spaces and escape characters
+                        image_path = os.path.expanduser(image_path)
+                        image_path = os.path.abspath(image_path)
+                        
+                        if not os.path.exists(image_path):
+                            response = f"File not found: {image_path}\nPlease check if the file path is correct."
+                        else:
+                            image_query = remaining[end_quote_index + 1:].strip()
+                            response = await master.process(image_query, image_path=image_path)
                     else:
                         response = "Invalid format. Please make sure to close the quotes around the file path."
                 else:
                     # Try to split on space if no quotes
                     parts = remaining.split(None, 1)
-                    image_path = parts[0]
-                    image_query = parts[1] if len(parts) > 1 else ""
-                    response = await master.process(image_query, image_path=image_path)
+                    image_path = os.path.expanduser(parts[0])
+                    image_path = os.path.abspath(image_path)
+                    
+                    if not os.path.exists(image_path):
+                        response = f"File not found: {image_path}\nPlease check if the file path is correct."
+                    else:
+                        image_query = parts[1] if len(parts) > 1 else ""
+                        response = await master.process(image_query, image_path=image_path)
             else:
                 # Process the query normally
                 response = await master.process(query)

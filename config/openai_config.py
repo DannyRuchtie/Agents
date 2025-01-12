@@ -4,7 +4,9 @@ import base64
 from typing import Dict, Any, List, Union
 
 from openai import OpenAI
-from openai._base_client import SyncHttpxClientWrapper
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # OpenAI client singleton
 _client = None
@@ -13,13 +15,7 @@ def get_client() -> OpenAI:
     """Get or create the OpenAI client singleton."""
     global _client
     if _client is None:
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is not set")
-        _client = OpenAI(
-            api_key=api_key,
-            http_client=SyncHttpxClientWrapper()
-        )
+        _client = OpenAI()  # Will use OPENAI_API_KEY from environment
     return _client
 
 def encode_image(image_path: str) -> str:
