@@ -52,33 +52,40 @@ def create_image_message(text: str, image_paths: Union[str, List[str]], detail: 
     return content
 
 # Default model settings
-DEFAULT_MODEL = "gpt-4o-mini"  # Updated to use the mini vision model
+DEFAULT_MODEL = "gpt-4o"  # Using the latest GPT-4 Optimized model
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "model": DEFAULT_MODEL,
     "max_tokens": 4096,  # Standard context window
+    "response_format": { "type": "text" }  # Ensure text responses
 }
 
 # Agent-specific configurations
 AGENT_CONFIGS = {
     "master": {
         "temperature": 0.3,  # Balanced decision-making
+        "seed": 123  # For consistent responses
     },
     "memory": {
         "temperature": 0.2,  # Consistent memory retrieval
+        "seed": 456
     },
     "search": {
         "temperature": 0.2,  # Precise search terms
+        "seed": 789
     },
     "writer": {
         "temperature": 0.4,  # Balanced creativity and consistency
+        "seed": 321
     },
     "code": {
         "temperature": 0.1,  # Very precise code generation
+        "seed": 654
     },
     "vision": {
         "temperature": 0.2,  # Precise image analysis
         "max_tokens": 300,  # Shorter responses for image analysis
+        "seed": 987
     }
 }
 

@@ -12,13 +12,16 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from PyPDF2 import PdfReader
 
+from config.paths_config import get_path
+
 class ScannerAgent:
+    """Agent for handling document processing and vectorization."""
+    
     def __init__(self):
+        """Initialize the Scanner Agent."""
         # Set up document storage
-        self.docs_dir = Path("documents")
-        self.vectordb_dir = self.docs_dir / "vectordb"
-        self.docs_dir.mkdir(exist_ok=True)
-        self.vectordb_dir.mkdir(exist_ok=True)
+        self.docs_dir = get_path('documents')
+        self.vectordb_dir = get_path('vectorstore')
         
         # Initialize embeddings and vector store
         try:

@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 
 from .base_agent import BaseAgent
+from config.paths_config import get_path
 
 LEARNING_SYSTEM_PROMPT = """You are a Learning Agent responsible for improving the system through conversation analysis.
 Your tasks include:
@@ -25,11 +26,10 @@ class LearningAgent(BaseAgent):
             agent_type="learning",
             system_prompt=LEARNING_SYSTEM_PROMPT,
         )
-        self.learning_dir = Path("learning_data")
-        self.learning_dir.mkdir(exist_ok=True)
-        self.patterns_file = self.learning_dir / "interaction_patterns.json"
-        self.improvements_file = self.learning_dir / "suggested_improvements.json"
-        self.prompts_file = self.learning_dir / "improved_prompts.json"
+        learning_dir = get_path('learning_data')
+        self.patterns_file = learning_dir / "interaction_patterns.json"
+        self.improvements_file = learning_dir / "suggested_improvements.json"
+        self.prompts_file = learning_dir / "improved_prompts.json"
         self._load_data()
         
     def _load_data(self):
