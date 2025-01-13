@@ -86,14 +86,8 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
     async def process(self, input_text: str, messages: Optional[List[Dict[str, str]]] = None, **kwargs: Any) -> str:
         """Process the input text and return a response."""
         try:
-            print("\n=== Base Agent Processing ===")
-            print(f"Input text: {input_text}")
-            print(f"Messages: {messages}")
-            print(f"Agent type: {self.agent_type}")
-            
             # Check if this is an image request and we're not already the vision agent
             if self.agent_type != "vision" and self._is_image_path(input_text):
-                print("Detected image path, routing to vision agent...")
                 from agents.vision_agent import VisionAgent
                 vision_agent = VisionAgent()
                 image_path, query = self._extract_image_path(input_text)
@@ -105,16 +99,14 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             
             # Use provided messages or build from context window
             if messages:
-                print("Using provided messages")
                 # For vision messages, use them directly without modification
                 if any(isinstance(msg.get('content'), list) and 
                       any(item.get('type') == 'image_url' for item in msg['content']) 
                       for msg in messages):
-                    print("Detected vision message format")
+                    pass
                 else:
                     messages = [{"role": "system", "content": self.system_prompt}, *messages]
             else:
-                print("Building messages from context window")
                 messages = self.get_context_window()
                 messages.append({"role": "user", "content": input_text})
             
@@ -127,26 +119,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
                 "response_format": kwargs.get("response_format", self.config.get("response_format", {"type": "text"}))
             }
             
-            print("\nFinal Configuration:")
-            print(f"Model: {config['model']}")
-            print(f"Temperature: {config['temperature']}")
-            print(f"Max tokens: {config['max_tokens']}")
-            print("\nFinal Messages:")
-            for msg in messages:
-                print(f"Role: {msg['role']}")
-                if isinstance(msg['content'], list):
-                    print("Content (list):")
-                    for item in msg['content']:
-                        print(f"  - Type: {item.get('type')}")
-                        if item.get('type') == 'image_url':
-                            print(f"  - Image URL present")
-                        else:
-                            print(f"  - Content: {item.get('text', '')}")
-                else:
-                    print(f"Content: {msg['content']}")
-            
             # Make the API call
-            print("\nMaking API call...")
             completion = self.client.chat.completions.create(
                 messages=messages,
                 **config
@@ -154,7 +127,6 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             
             # Extract assistant's response
             assistant_message = completion.choices[0].message.content
-            print(f"\nAPI Response: {assistant_message[:100]}...")
             
             # Only update conversation history if using standard input
             if not messages:
@@ -165,8 +137,6 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             return assistant_message
             
         except Exception as e:
-            error_msg = f"Error in OpenAI API call: {str(e)}"
-            print(f"\nERROR: {error_msg}")
             return f"I encountered an error: {str(e)}"
     
     def clear_history(self) -> None:
