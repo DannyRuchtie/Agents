@@ -106,16 +106,10 @@ class VisionAgent(BaseAgent):
     async def analyze_image(self, image_path: str, query: str = "") -> str:
         """Analyze a shared image."""
         try:
-            print("\n=== Vision Agent Analysis ===")
-            print(f"Image path: {image_path}")
-            print(f"Query: {query}")
-            
             try:
                 # Verify image can be read and encoded
                 encoded_image = self._encode_image(image_path)
-                print("✓ Image encoded successfully")
             except Exception as e:
-                print(f"❌ Cannot access/encode image: {str(e)}")
                 return f"Cannot access/encode image file: {str(e)}"
             
             # Create message content
@@ -136,7 +130,6 @@ class VisionAgent(BaseAgent):
                 {"role": "user", "content": content}
             ]
             
-            print("\nSending to vision model...")
             try:
                 # Use base agent's process method with vision model config
                 response = await super().process(
@@ -146,14 +139,11 @@ class VisionAgent(BaseAgent):
                     max_tokens=300,
                     response_format={"type": "text"}  # Ensure text response
                 )
-                print("✓ Got response from vision model")
-                return f"🔍 Analysis of the image:\n\n{response}"
+                return response
             except Exception as e:
-                print(f"❌ Vision model error: {str(e)}")
                 return f"Error during image analysis: {str(e)}"
             
         except Exception as e:
-            print(f"❌ General error: {str(e)}")
             return f"Error processing image: {str(e)}"
     
     async def capture_screen(self, region=None) -> str:
