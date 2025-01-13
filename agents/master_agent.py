@@ -230,16 +230,19 @@ I'm always here to help with anything - whether it's finding information, giving
         debug_print(f"Processing query: {query}")
         debug_print(f"Available agents: {list(self.agents.keys())}")
         
+        # Get name from memory if available
+        name = None
+        if "memory" in self.agents:
+            name_info = await self.agents["memory"].retrieve("personal", None)
+            name = next((entry.replace("Name:", "").strip() 
+                       for entry in name_info 
+                       if isinstance(entry, str) and entry.lower().startswith("name:")), None)
+        
         # Handle greetings and casual conversation
         greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
         if query.lower().strip() in greetings:
-            if "memory" in self.agents:
-                name_info = await self.agents["memory"].retrieve("personal", None)
-                name = next((entry.replace("Name:", "").strip() 
-                           for entry in name_info 
-                           if isinstance(entry, str) and entry.lower().startswith("name:")), None)
-                if name:
-                    return f"Hey {name}! 😊 Great to chat with you! How's your day going?"
+            if name:
+                return f"Hey {name}! 😊 Great to chat with you! How's your day going?"
             return "Hey there! 😊 Great to see you! How can I help you today?"
         
         # First check memory for context
@@ -255,7 +258,15 @@ I'm always here to help with anything - whether it's finding information, giving
                     debug_print(f"Found name entries: {name_entries}")
                     if name_entries:
                         name = name_entries[-1].replace("Name:", "").strip()
-                        debug_print(f"Extracted name: {name}")
+                        timestamp = await self.agents["memory"].get_timestamp("personal", name_entries[-1])
+                        debug_print(f"Extracted name: {name} with timestamp {timestamp}")
+                        
+                        # Handle follow-up questions about when the name was stored
+                        if any(word in query.lower() for word in ["when", "what time", "how long"]):
+                            if timestamp:
+                                return f"You told me your name is {name} on {timestamp}! 😊"
+                            return f"I remember your name is {name}, but I'm not sure exactly when you told me that. 😊"
+                        
                         return f"Of course! You're {name}! How can I help you today? 😊"
                 return "I don't know your name yet! Would you like to introduce yourself? 😊"
             
@@ -286,9 +297,12 @@ I'm always here to help with anything - whether it's finding information, giving
             except Exception as e:
                 debug_print(f"Error with location agent: {str(e)}")
         
-        # If we need to search for information
-        if "search" in self.agents:
-            debug_print("Using search agent...")
+        # Only search if explicitly needed for factual information
+        search_keywords = ["what is", "who is", "tell me about", "search", "find", "lookup", "how to", "when was", "where is"]
+        needs_search = any(keyword in query.lower() for keyword in search_keywords)
+        
+        if needs_search and "search" in self.agents:
+            debug_print("Query requires search, using search agent...")
             try:
                 search_results = await self.agents["search"].search(query)
                 if search_results:
@@ -296,13 +310,31 @@ I'm always here to help with anything - whether it's finding information, giving
                     if "writer" in self.agents:
                         debug_print("Using writer agent to format response...")
                         response = await self.agents["writer"].format_response(search_results, query)
-                        return f"I found something interesting for you! {response} 😊"
+                        return f"Based on what I found: {response}"
                     else:
                         return "Here's what I found:\n" + "\n".join(f"• {result}" for result in search_results[:3])
             except Exception as e:
                 debug_print(f"Error with search agent: {str(e)}")
+                # Fall back to conversation mode instead of failing
+                return await self._handle_conversation(query, name)
         
         # For general conversation, be friendly and personal
+        return await self._handle_conversation(query, name)
+    
+    async def _handle_conversation(self, query: str, name: Optional[str] = None) -> str:
+        """Handle general conversation in a friendly, personal way."""
+        # Use varied, natural responses for conversation
+        import random
+        conversation_starters = [
+            f"Hey{' ' + name if name else ''}! ",
+            f"You know what? ",
+            f"Well, ",
+            f"Hmm, ",
+            ""  # Sometimes start directly
+        ]
+        
         prompt = f"""As a friendly AI assistant chatting with {name if name else 'my friend'}, 
         respond to this in a casual, warm way: {query}"""
-        return await super().process(prompt) 
+        response = await super().process(prompt)
+        
+        return random.choice(conversation_starters) + response 
