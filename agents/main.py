@@ -1,46 +1,44 @@
-from typing import Optional
-import re
-import tempfile
-import os
+"""Master agent that coordinates other specialized agents."""
+
+from typing import Optional, Dict, Any
+import json
+import asyncio
+from pathlib import Path
+
 from config.settings import (
+    AGENT_SETTINGS,
     PERSONALITY_SETTINGS,
-    SYSTEM_SETTINGS,
     VOICE_SETTINGS,
+    SYSTEM_SETTINGS,
     is_agent_enabled,
     enable_agent,
     disable_agent,
-    get_agent_status,
-    get_agent_info,
-    save_settings,
-    is_voice_enabled,
-    enable_voice,
-    disable_voice,
-    set_voice,
-    set_voice_speed,
-    get_voice_info,
     is_debug_mode,
-    enable_debug,
-    disable_debug,
     debug_print
 )
 
+from agents.base_agent import BaseAgent
+from agents.memory_agent import MemoryAgent
+from agents.search_agent import SearchAgent
+from agents.writer_agent import WriterAgent
+from agents.code_agent import CodeAgent
+from agents.scanner_agent import ScannerAgent
+from agents.vision_agent import VisionAgent
+from agents.location_agent import LocationAgent
+from agents.learning_agent import LearningAgent
+from agents.voice import voice_output
+
 class MasterAgent(BaseAgent):
-    """Master agent that coordinates all other agents."""
+    """Master agent that coordinates other specialized agents."""
     
     def __init__(self):
-        # Use global personality settings
+        """Initialize the master agent."""
+        super().__init__()
+        
+        # Copy personality settings
         self.personality = PERSONALITY_SETTINGS.copy()
         
-        # Update system prompt with personality
-        personality_prompt = self._generate_personality_prompt()
-        system_prompt = f"{MASTER_SYSTEM_PROMPT}\n\n{personality_prompt}"
-        
-        super().__init__(
-            agent_type="master",
-            system_prompt=system_prompt,
-        )
-        
-        # Initialize enabled sub-agents
+        # Initialize enabled agents
         self.agents = {}
         if is_agent_enabled("memory_agent"):
             self.agents["memory"] = MemoryAgent()
@@ -58,129 +56,73 @@ class MasterAgent(BaseAgent):
             self.agents["location"] = LocationAgent()
         if is_agent_enabled("learning_agent"):
             self.agents["learning"] = LearningAgent()
+            
+        debug_print("✓ Master agent initialized with enabled agents")
         
-        # Environment and state flags from global settings
-        self.os_type = SYSTEM_SETTINGS["os_type"]
-        self.has_location_access = SYSTEM_SETTINGS["has_location_access"]
-        self.has_screen_access = SYSTEM_SETTINGS["has_screen_access"]
-        self.conversation_depth = 0  # Track conversation depth for a topic
-        
-        # Ensure required directories exist
-        ensure_directories()
-        
-    async def process(self, query: str, image_path: Optional[str] = None) -> str:
-        """Process a user query and coordinate agent responses."""
-        query_lower = query.lower().strip()
-        
-        if is_debug_mode():
-            debug_print("\n=== Processing Query ===")
-            debug_print(f"Query: {query}")
+    async def process(self, query: str) -> str:
+        """Process a user query and return a response."""
+        debug_print(f"\nProcessing query: {query}")
         
         try:
-            # Handle debug mode commands
-            if query_lower in ["enable debug", "debug on"]:
-                enable_debug()
-                return "✅ Debug mode enabled"
-                
-            if query_lower in ["disable debug", "debug off"]:
-                disable_debug()
-                return "✅ Debug mode disabled"
-                
-            if query_lower == "debug status":
-                return f"Debug mode is {'enabled' if is_debug_mode() else 'disabled'}"
-            
-            # First check memory for context
-            memories = []
-            if "memory" in self.agents:
-                debug_print("\nSearching memory...")
-                for category in ["personal", "projects", "schedule"]:
-                    results = await self.agents["memory"].retrieve(category, query)
-                    if results:
-                        memories.extend(results)
-                        debug_print(f"Found {len(results)} memories in {category}")
-            
-            # If this is a travel/location query, use location agent
-            if any(word in query_lower for word in ["bali", "travel", "trip", "visit", "location", "weather"]):
-                if "location" in self.agents:
-                    debug_print("\nQuerying location agent...")
-                    location_info = await self.agents["location"].get_location_info("Bali", query)
-                    if location_info:
-                        response = f"Here's what I found about Bali:\n{location_info}"
-                        if memories:
-                            response += f"\n\nFrom our previous discussions:\n" + "\n".join(f"• {memory}" for memory in memories)
+            # Handle voice commands
+            if query.lower().startswith(("voice", "speak")):
+                parts = query.lower().split()
+                if len(parts) >= 2:
+                    cmd = parts[1]
+                    
+                    if cmd == "status":
+                        status = "enabled" if VOICE_SETTINGS["enabled"] else "disabled"
+                        voice = VOICE_SETTINGS["voice"]
+                        speed = VOICE_SETTINGS["speed"]
+                        return f"Voice output is {status}, using voice '{voice}' at speed {speed}x"
                         
-                        debug_print(f"\nGot response: {response}")
+                    elif cmd in ["on", "enable"]:
+                        VOICE_SETTINGS["enabled"] = True
+                        return "Voice output enabled"
                         
-                        # Store this interaction in memory
-                        if "memory" in self.agents:
-                            await self.agents["memory"].store("projects", f"Discussed Bali travel plans: {query}")
+                    elif cmd in ["off", "disable"]:
+                        VOICE_SETTINGS["enabled"] = False
+                        return "Voice output disabled"
                         
-                        # Speak the response if voice is enabled
-                        if is_voice_enabled():
-                            debug_print("\nStarting voice output...")
-                            await voice_output.speak(response)
-                            debug_print("Voice output complete")
-                        
-                        return response
+                    elif cmd == "voice" and len(parts) >= 3:
+                        voice = parts[2]
+                        if voice in VOICE_SETTINGS["available_voices"]:
+                            VOICE_SETTINGS["voice"] = voice
+                            return f"Voice set to '{voice}'"
+                        else:
+                            return f"Invalid voice. Available voices: {', '.join(VOICE_SETTINGS['available_voices'].keys())}"
+                            
+                    elif cmd == "speed" and len(parts) >= 3:
+                        try:
+                            speed = float(parts[2])
+                            if 0.5 <= speed <= 2.0:
+                                VOICE_SETTINGS["speed"] = speed
+                                return f"Voice speed set to {speed}x"
+                            else:
+                                return "Speed must be between 0.5 and 2.0"
+                        except ValueError:
+                            return "Invalid speed value"
             
-            # If we need to search for information
-            if "search" in self.agents and any(word in query_lower for word in ["find", "search", "look up", "what", "how", "when", "where"]):
-                debug_print("\nPerforming web search...")
-                search_results = await self.agents["search"].search(query)
-                if search_results:
-                    # Use writer agent to format the response if available
-                    if "writer" in self.agents:
-                        debug_print("\nFormatting search results...")
-                        response = await self.agents["writer"].format_response(search_results, query)
-                    else:
-                        response = "\n".join(f"• {result}" for result in search_results[:3])
-                    
-                    if memories:
-                        response += f"\n\nFrom our previous discussions:\n" + "\n".join(f"• {memory}" for memory in memories)
-                    
-                    debug_print(f"\nGot response: {response}")
-                    
-                    # Store this interaction in memory
-                    if "memory" in self.agents:
-                        await self.agents["memory"].store("projects", f"Searched for information: {query}")
-                    
-                    # Speak the response if voice is enabled
-                    if is_voice_enabled():
-                        debug_print("\nStarting voice output...")
-                        await voice_output.speak(response)
-                        debug_print("Voice output complete")
-                    
-                    return response
+            # Process query with enabled agents
+            response = await self._process_with_agents(query)
             
-            # If we just found memories, return those
-            if memories:
-                debug_print(f"Found total of {len(memories)} memories")
-                memory_response = "\n".join(f"• {memory}" for memory in memories)
-                response = f"I found these relevant memories:\n\n{memory_response}"
+            # Speak response if voice is enabled
+            if VOICE_SETTINGS["enabled"]:
+                debug_print("Speaking response with voice output")
+                voice_output.speak(response)
                 
-                debug_print(f"\nGot response: {response}")
-                
-                # Speak the response if voice is enabled
-                if is_voice_enabled():
-                    debug_print("\nStarting voice output...")
-                    await voice_output.speak(response)
-                    debug_print("Voice output complete")
-                
-                return response
-            
-            # If no specific handling, use default processing
-            response = await super().process(query)
-            debug_print(f"\nGot response: {response}")
-            
-            # Speak the response if voice is enabled
-            if is_voice_enabled():
-                debug_print("\nStarting voice output...")
-                await voice_output.speak(response)
-                debug_print("Voice output complete")
-            
             return response
             
         except Exception as e:
-            error_msg = f"Error processing request: {str(e)}"
-            debug_print(f"❌ {error_msg}")
-            return error_msg 
+            error_msg = f"Error processing query: {str(e)}"
+            debug_print(error_msg)
+            return error_msg
+            
+    async def _process_with_agents(self, query: str) -> str:
+        """Process query using available agents."""
+        # Implementation of agent coordination logic
+        # This is a placeholder - implement actual agent coordination
+        return f"Processing: {query}"
+
+# Initialize the master agent
+master_agent = MasterAgent() 
