@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from .base_agent import BaseAgent
 from config.paths_config import get_path, AGENTS_DOCS_DIR
 
@@ -164,3 +164,25 @@ class MemoryAgent(BaseAgent):
         except Exception as e:
             print(f"Error retrieving family members: {str(e)}")
             return [] 
+
+    async def get_timestamp(self, category: str, content: str) -> Optional[str]:
+        """Get the timestamp for when a specific memory was stored."""
+        try:
+            if not os.path.exists(self.memory_file):
+                return None
+                
+            with open(self.memory_file, 'r') as f:
+                memories = json.load(f)
+                
+            if category in memories:
+                for entry in memories[category]:
+                    if isinstance(entry, dict) and entry.get('content') == content:
+                        return entry.get('timestamp')
+                    elif isinstance(entry, str) and entry == content:
+                        # For older entries that don't have timestamps
+                        return None
+            return None
+            
+        except Exception as e:
+            debug_print(f"Error getting timestamp: {str(e)}")
+            return None 
