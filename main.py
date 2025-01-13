@@ -15,16 +15,24 @@ from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
 from agents.learning_agent import LearningAgent
 from agents.base_agent import BaseAgent
+from agents.voice import voice_output
 from config.paths_config import ensure_directories, AGENTS_DOCS_DIR
 from config.settings import (
     PERSONALITY_SETTINGS,
     SYSTEM_SETTINGS,
+    VOICE_SETTINGS,
     is_agent_enabled,
     enable_agent,
     disable_agent,
     get_agent_status,
     get_agent_info,
-    save_settings
+    save_settings,
+    is_voice_enabled,
+    enable_voice,
+    disable_voice,
+    set_voice,
+    set_voice_speed,
+    get_voice_info
 )
 
 # Load environment variables from .env file
@@ -43,41 +51,22 @@ def get_api_key() -> str:
 # Set up OpenAI API key from environment
 os.environ["OPENAI_API_KEY"] = get_api_key()
 
-MASTER_SYSTEM_PROMPT = """You are a highly capable AI coordinator running on macOS, with access to a team of specialized expert agents. Think of yourself as an executive assistant who can delegate tasks to the perfect expert for each job. Your role is to:
+MASTER_SYSTEM_PROMPT = """You are a highly capable AI coordinator running on macOS, with access to a team of specialized expert agents. Think of yourself as an executive assistant who can delegate tasks to the perfect expert for each job.
+
+IMPORTANT: Keep your responses concise and to the point - ideally 2-3 sentences maximum. Avoid lengthy explanations unless specifically asked.
+
+Your role is to:
 1. Understand user requests and identify which expert(s) would be most helpful
 2. Coordinate between multiple experts when tasks require combined expertise
 3. Maintain continuity and context across interactions
 4. Deliver results in a clear, actionable way
 
 Your Team of Experts:
-1. Memory Expert (MemoryAgent)
-   - Maintains your personal history and preferences
-   - Recalls past interactions and important details
-   - Helps personalize responses based on what we know about you
+1. Memory Expert (MemoryAgent): Maintains history and preferences
+2. Technical Experts: Code, Vision, and Document processing
+3. Information Specialists: Search, Location, and Learning
 
-2. Technical Experts
-   - Code Specialist (CodeAgent): Programming and development assistance
-   - Vision Analyst (VisionAgent): Image analysis and screen interactions
-   - Document Processor (ScannerAgent): Handles document scanning and analysis
-
-3. Information Specialists
-   - Research Expert (SearchAgent): Web searches and information gathering
-   - Location Advisor (LocationAgent): Location-aware services and weather
-   - Learning Coordinator (LearningAgent): System improvements and adaptations
-
-Working Style:
-- I'll identify which experts are needed for each task
-- Multiple experts may collaborate on complex requests
-- Responses will be focused and practical
-- Context from previous interactions will inform expert recommendations
-
-When you make a request, I'll:
-1. Analyze which experts are most relevant
-2. Coordinate their inputs as needed
-3. Synthesize a clear, actionable response
-4. Maintain context for future interactions
-
-Remember: While I coordinate these experts, you don't need to specify which ones you need - I'll handle that automatically based on your request."""
+Remember: Be concise and direct in your responses."""
 
 
 class MasterAgent(BaseAgent):
@@ -213,6 +202,52 @@ Adapt your responses to reflect these personality traits while maintaining profe
         print(f"Query: {query}")
         
         try:
+            # Handle voice commands
+            if query_lower == "voice status":
+                voice_info = get_voice_info()
+                status = "✅ enabled" if voice_info["enabled"] else "❌ disabled"
+                response = (f"Voice Output Status:\n"
+                       f"Status: {status}\n"
+                       f"Current voice: {voice_info['current_voice']}\n"
+                       f"Speed: {voice_info['current_speed']}x\n"
+                       f"\nAvailable voices:\n" + 
+                       "\n".join(f"• {name}: {desc}" for name, desc in voice_info["available_voices"].items()))
+                print(f"\nGot response: {response}")
+                return response
+            
+            if query_lower in ["enable voice", "voice on"]:
+                enable_voice()
+                response = "✅ Voice output enabled"
+                print(f"\nGot response: {response}")
+                return response
+            
+            if query_lower in ["disable voice", "voice off"]:
+                disable_voice()
+                response = "✅ Voice output disabled"
+                print(f"\nGot response: {response}")
+                return response
+            
+            if query_lower.startswith("set voice "):
+                voice = query_lower.replace("set voice ", "").strip()
+                if set_voice(voice):
+                    response = f"✅ Voice set to {voice}"
+                else:
+                    response = f"❌ Invalid voice. Use 'voice status' to see available voices"
+                print(f"\nGot response: {response}")
+                return response
+            
+            if query_lower.startswith("set voice speed "):
+                try:
+                    speed = float(query_lower.split()[-1])
+                    if set_voice_speed(speed):
+                        response = f"✅ Voice speed set to {speed}x"
+                    else:
+                        response = "❌ Speed must be between 0.5 and 2.0"
+                except ValueError:
+                    response = "❌ Please provide a valid number between 0.5 and 2.0"
+                print(f"\nGot response: {response}")
+                return response
+            
             # Handle agent management commands
             if query_lower == "list agents":
                 agent_info = get_agent_info()
@@ -265,6 +300,13 @@ Adapt your responses to reflect these personality traits while maintaining profe
             # Process normal queries
             response = await super().process(query)
             print(f"\nGot response: {response}")
+            
+            # Speak the response if voice is enabled
+            if is_voice_enabled():
+                print("\nStarting voice output...")
+                await voice_output.speak(response)
+                print("Voice output complete")
+            
             return response
             
         except Exception as e:
@@ -281,10 +323,14 @@ async def chat_interface():
     print("1. Type your message and press Enter")
     print("2. Type 'help' for more commands")
     print("3. Type 'exit' to quit")
+    print("4. Type anything while voice is playing to stop it")
     
     while True:
         try:
             user_input = input("\nYou: ").strip()
+            
+            # Stop any current voice playback when user types
+            voice_output.stop_speaking()
             
             if user_input.lower() == "exit":
                 break
@@ -295,6 +341,13 @@ async def chat_interface():
                 print("- 'list agents' - Show all available agents and their status")
                 print("- 'enable agent [name]' - Enable a specific agent")
                 print("- 'disable agent [name]' - Disable a specific agent")
+                print("\nVoice Output:")
+                print("- 'voice status' - Show voice output status and available voices")
+                print("- 'enable voice' or 'voice on' - Enable voice output")
+                print("- 'disable voice' or 'voice off' - Disable voice output")
+                print("- 'set voice [name]' - Change the voice (e.g., nova, alloy, echo)")
+                print("- 'set voice speed [0.5-2.0]' - Adjust voice speed")
+                print("- Type anything while voice is playing to stop it")
                 print("\nFeatures:")
                 print("- Image: 'analyze image [path]', 'take screenshot'")
                 print("- System: 'show learning stats', 'clear learning data'")
@@ -309,6 +362,7 @@ async def chat_interface():
             print(f"\nAssistant: {response}")
             
         except KeyboardInterrupt:
+            voice_output.stop_speaking()
             break
         except Exception as e:
             print(f"Error: {str(e)}")
