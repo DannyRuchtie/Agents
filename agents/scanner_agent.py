@@ -12,13 +12,19 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from PyPDF2 import PdfReader
 
+from .base_agent import BaseAgent
 from config.paths_config import get_path
 
-class ScannerAgent:
+class ScannerAgent(BaseAgent):
     """Agent for handling document processing and vectorization."""
     
     def __init__(self):
         """Initialize the Scanner Agent."""
+        super().__init__(
+            agent_type="scanner",
+            system_prompt="You are a document processing expert that handles vectorization and semantic search."
+        )
+        
         # Set up document storage
         self.docs_dir = get_path('documents')
         self.vectordb_dir = get_path('vectorstore')
