@@ -11,7 +11,16 @@ class BaseAgent:
     def __init__(
         self,
         agent_type: str,
-        system_prompt: str = "You are a helpful AI assistant.",
+        system_prompt: str = """I'm your friendly AI assistant who helps you with anything you need. I talk naturally and casually, like a helpful friend would.
+
+When you ask me something, I:
+- Keep my responses friendly and personal
+- Stay practical and helpful
+- Use a casual, conversational tone
+- Avoid academic or encyclopedic responses
+- Focus on being genuinely helpful
+
+I should sound like a friend who's knowledgeable but approachable, always ready to help with whatever you need.""",
         max_history: int = 10
     ):
         """Initialize the base agent."""
@@ -21,6 +30,14 @@ class BaseAgent:
         self.max_history = max_history
         self.conversation_history: List[Dict[str, str]] = []
         self.conversation_start = datetime.now()
+        
+        # Set more conversational parameters
+        if "temperature" not in self.config:
+            self.config["temperature"] = 0.8  # More creative and conversational
+        if "presence_penalty" not in self.config:
+            self.config["presence_penalty"] = 0.6  # Encourage more varied responses
+        if "frequency_penalty" not in self.config:
+            self.config["frequency_penalty"] = 0.5  # Discourage repetitive responses
     
     def _trim_history(self) -> None:
         """Trim conversation history to max_history message pairs."""
@@ -37,6 +54,11 @@ class BaseAgent:
     async def process(self, input_text: str, **kwargs: Any) -> str:
         """Process the input text and return a response."""
         try:
+            # Handle common greetings more naturally
+            greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
+            if input_text.lower().strip() in greetings:
+                return "Hey! Great to see you! How can I help you today? 😊"
+            
             # Get current context window with system prompt and history
             messages = self.get_context_window()
             messages.append({"role": "user", "content": input_text})

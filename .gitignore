@@ -50,3 +50,4 @@ build/
 /agents_docs/static/temp/
 *.temp
 *.tmp
+/models

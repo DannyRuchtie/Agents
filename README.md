@@ -1,17 +1,52 @@
-# Multi-Agent AI Assistant: Your Personal Digital Command Center
+# Personal AI Assistant
 
-In the ever-evolving landscape of AI assistants, there's a persistent question that keeps surfacing: what if we could have the power of modern AI without compromising on privacy, while maintaining complete control over our digital workspace? That's exactly what this Multi-Agent AI Assistant sets out to solve, and it does so with a fascinating approach that feels both futuristic and surprisingly practical.
+Your friendly AI assistant that acts like a close friend who knows you well and is always ready to help. It remembers your conversations, family details, and preferences, making every interaction personal and natural. Think of it as having a knowledgeable friend who's always there to chat, help with tasks, or find information - all while keeping the conversation casual and fun.
 
-## What Makes This Different?
+## What Makes This Special?
 
-Unlike traditional cloud-based assistants, this system operates primarily on your local machine, creating a powerful bridge between advanced AI capabilities and your personal computing environment. It's not just another chat interface – it's a sophisticated multi-agent system that can:
+- **Acts Like a Real Friend**: Not just an AI - it's a friendly presence that knows you, your family, and your preferences
+- **Natural Conversations**: Chats like a real person, with appropriate humor and personality
+- **Remembers Everything**: Uses past conversations to make interactions more personal
+- **Always Helpful**: Combines being friendly with being genuinely useful
+- **Voice Enabled**: Can speak responses naturally, making it feel more like talking to a friend
 
-- 🔍 **Access Your Local Environment**: Interact with your calendar, files, and applications while keeping your data under your control
-- 🧠 **Build Persistent Memory**: Learn from interactions and maintain context across sessions
-- 🌐 **Combine Local & Web Resources**: Seamlessly blend local knowledge with web-sourced information
-- 🎯 **Provide Contextual Assistance**: Understand your location, schedule, and preferences to offer more relevant help
-- 🔐 **Prioritize Privacy**: Keep sensitive information local and secure
-- 🎤 **Natural Voice Interaction**: Wake word detection and continuous conversation support
+## How It Behaves
+
+The assistant is designed to be your friendly helper who:
+- Greets you warmly and remembers previous conversations
+- Uses casual, natural language instead of formal responses
+- Brings up relevant details about you and your family when appropriate
+- Keeps things light and fun while still being helpful
+- Adapts its personality to match your preferences
+
+### Personality Traits
+
+The assistant's personality is customizable but always maintains a friendly, helpful demeanor:
+
+- **Humor**: Can be witty and fun (adjustable from subtle to more playful)
+- **Formality**: Keeps things casual like a friend (adjustable to your comfort level)
+- **Empathy**: Shows understanding and support when needed
+- **Engagement**: Shows genuine interest in your questions and concerns
+- **Enthusiasm**: Maintains an upbeat, positive attitude
+
+### Example Conversations
+
+```
+You: Hi there!
+Assistant: Hey! Great to see you! How can I help you today? 😊
+
+You: Can you remind me what my kids' names are?
+Assistant: Of course! You have two wonderful children - Lena and Tobias! How are they doing?
+
+You: I need help planning a trip
+Assistant: I'd love to help you plan something! Given that you have two kids, Lena and Tobias, 
+should we look for family-friendly destinations? I remember we talked about Bali before - 
+is that still interesting, or would you like to explore other options? 😊
+
+You: What's new in tech?
+Assistant: Let me check that for you! I know you're interested in AI and development, 
+so I'll focus on those areas while keeping it practical and relevant to your work.
+```
 
 ## Core Features
 
@@ -23,13 +58,10 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 - **Scanner Agent**: Document vectorization and semantic search
 - **Vision Agent**: Image analysis and screen content understanding
 - **Location Agent**: Location-aware services and recommendations
-- **Speech Agent**: Natural voice interaction with customizable voices and speeds
 - **Learning Agent**: System improvement through usage analysis
 
 ### 🎯 Key Capabilities
-- Voice interaction with wake word detection
-- Customizable voices and speech settings
-- Calendar and reminder management
+- Local text-to-speech with customizable voices
 - Document analysis and semantic search
 - Screen capture and image analysis
 - Location-aware assistance
@@ -41,7 +73,6 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 ### Prerequisites
 - Python 3.11 or higher
 - OpenAI API key
-- Picovoice API key (for wake word detection)
 - macOS (for full feature compatibility)
 
 ### Installation
@@ -65,7 +96,7 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 4. Set up your environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env with your OpenAI API key and Picovoice key
+   # Edit .env with your OpenAI API key
    ```
 
 ### Running the Assistant
@@ -73,48 +104,31 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 python main.py
 ```
 
-## Voice Interaction Guide
-
-### Wake Word Detection
-The assistant listens for the wake word "computer" before accepting commands. You can:
-1. Say "computer" to activate listening mode
-2. Speak your command when you see "Listening..."
-3. Wait for the response or continue with more commands
+## Voice Output Guide
 
 ### Voice Settings
 ```bash
-# List available voices
-list voices
+# Check voice status
+voice status
+
+# Enable/disable voice
+enable voice
+disable voice
 
 # Change voice
-set voice [name]  # Available: nova, echo, onyx, alloy, fable, shimmer
+set voice [name]  # Available: am_michael, af_bella, bf_emma, bm_george, af_sarah, af_sky
 
 # Adjust speech speed
-set speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
-
-# Enable/disable continuous listening
-continuous listening [on/off]
-
-# Adjust listening timeouts
-set wait timeout [seconds]    # Time to wait for speech to start
-set phrase timeout [seconds]  # Maximum duration of a command
+set voice speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
 ```
 
-### Voice Commands
-The assistant supports natural language commands. Examples:
-```
-"computer, what's the weather like?"
-"computer, search for latest AI news"
-"computer, summarize this document"
-"computer, take a screenshot"
-```
-
-### Continuous Conversation Mode
-Enable continuous listening to have natural back-and-forth conversations:
-1. Say "continuous listening on"
-2. Start with "computer" once
-3. Continue speaking commands without the wake word
-4. Say "stop listening" to exit continuous mode
+### Available Voices
+- `am_michael`: Adult male voice
+- `af_bella`: Adult female voice
+- `bf_emma`: British female voice
+- `bm_george`: British male voice
+- `af_sarah`: Adult female voice (default)
+- `af_sky`: Adult female voice (alternative)
 
 ## Personality Settings
 
@@ -139,7 +153,7 @@ toggle emoji [on/off]
 - All document processing happens on your machine
 - Memory storage is local and under your control
 - Web access is configurable and can be restricted
-- Voice data is processed locally except for speech-to-text conversion
+- Voice synthesis is performed locally using kokoro-onnx
 
 ## Contributing
 
@@ -147,13 +161,12 @@ This is an evolving project, and contributions are welcome! Whether it's adding 
 
 ## Future Roadmap
 
-- [ ] Additional wake word options
-- [ ] Custom wake word training
-- [ ] Offline speech-to-text support
 - [ ] Multi-language support
-- [ ] Enhanced voice activity detection
-- [ ] Voice profile customization
-- [ ] Improved continuous conversation handling
+- [ ] Enhanced voice synthesis options
+- [ ] Improved agent coordination
+- [ ] Expanded local capabilities
+- [ ] Advanced memory management
+- [ ] Custom voice profile creation
 
 ## License
 

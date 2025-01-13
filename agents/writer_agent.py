@@ -31,6 +31,21 @@ class WriterAgent(BaseAgent):
             system_prompt=WRITER_SYSTEM_PROMPT,
         )
     
+    async def format_response(self, search_results: list, query: str) -> str:
+        """Format search results into a coherent response."""
+        if not search_results:
+            return "I couldn't find any relevant information."
+            
+        prompt = (
+            f"Format these search results into a clear, concise response to the query.\n\n"
+            f"Query: {query}\n\n"
+            f"Search Results:\n" + "\n".join(f"- {result}" for result in search_results) + "\n\n"
+            f"Response (2-3 sentences maximum):"
+        )
+        
+        response = await self.process(prompt)
+        return response.strip()
+    
     async def expand(self, query: str, context: str) -> str:
         """Expand a query with given context into a well-written response."""
         # If we have search results, don't override them
