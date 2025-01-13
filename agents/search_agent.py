@@ -1,5 +1,7 @@
 """Search agent module for web information retrieval."""
 from typing import List
+import asyncio
+import time
 from duckduckgo_search import DDGS
 
 from .base_agent import BaseAgent
@@ -17,6 +19,8 @@ class SearchAgent(BaseAgent):
             system_prompt=SEARCH_SYSTEM_PROMPT,
         )
         self.search_client = DDGS()
+        self.last_search_time = 0
+        self.min_delay = 2  # Minimum delay between searches in seconds
     
     async def search(self, query: str) -> List[str]:
         """Perform a web search for the given query.
@@ -27,27 +31,31 @@ class SearchAgent(BaseAgent):
         Returns:
             A list of relevant search results
         """
-        # Add specific search modifiers for personal searches
-        if any(name in query.lower() for name in ["danny ruchtie", "danny", "ruchtie"]):
-            # Add specific terms to find personal/professional info
-            search_query = f"{query} (linkedin OR github OR profile OR about OR professional OR developer)"
-        else:
-            # For non-personal searches, optimize the query
-            response = await self.process(
-                f"Optimize this search query for web search by extracting and reformulating "
-                f"the key concepts. Make it concise and focused:\n{query}"
-            )
-            search_query = response
+        # Add delay between searches to avoid rate limiting
+        current_time = time.time()
+        time_since_last = current_time - self.last_search_time
+        if time_since_last < self.min_delay:
+            await asyncio.sleep(self.min_delay - time_since_last)
+        
+        # For non-personal searches, optimize the query
+        response = await self.process(
+            f"Optimize this search query for web search by extracting and reformulating "
+            f"the key concepts. Make it concise and focused:\n{query}"
+        )
+        search_query = response
         
         try:
             # Perform the web search
             results = []
             for r in self.search_client.text(
                 search_query,
-                max_results=5  # Limit to top 5 results
+                max_results=3  # Reduced to 3 results to help with rate limiting
             ):
                 if r.get('body'):
                     results.append(r['body'])
+            
+            # Update last search time
+            self.last_search_time = time.time()
             
             if not results:
                 # Fallback message if no results found
@@ -56,8 +64,16 @@ class SearchAgent(BaseAgent):
             return results
             
         except Exception as e:
-            # Handle any search errors gracefully
-            print(f"Search error: {str(e)}")
+            # Handle rate limiting errors more gracefully
+            error_str = str(e)
+            if "202" in error_str or "429" in error_str or "rate" in error_str.lower():
+                await asyncio.sleep(self.min_delay * 2)  # Wait longer on rate limit
+                return [
+                    "I'm currently being rate limited by the search service. "
+                    "Please wait a moment and try your search again."
+                ]
+            
+            print(f"Search error: {error_str}")
             return [
                 "I encountered an error while searching. "
                 "Please try again or rephrase your query."

@@ -1,0 +1,69 @@
+{
+  "agents": {
+    "memory": {
+      "enabled": true,
+      "description": "Stores and retrieves conversation history and important information"
+    },
+    "search": {
+      "enabled": true,
+      "description": "Searches the web for current information"
+    },
+    "writer": {
+      "enabled": true,
+      "description": "Composes and summarizes text"
+    },
+    "code": {
+      "enabled": true,
+      "description": "Generates and explains code"
+    },
+    "scanner": {
+      "enabled": true,
+      "description": "Processes documents and creates vector embeddings"
+    },
+    "vision": {
+      "enabled": true,
+      "description": "Analyzes images and screen content"
+    },
+    "location": {
+      "enabled": true,
+      "description": "Provides location information and travel assistance"
+    },
+    "learning": {
+      "enabled": true,
+      "description": "Improves system through conversation monitoring"
+    }
+  },
+  "personality": {
+    "humor_level": 0.8,
+    "formality_level": 0.2,
+    "emoji_usage": true,
+    "witty": true,
+    "empathetic": true,
+    "curious": true,
+    "enthusiastic": true
+  },
+  "voice": {
+    "enabled": true,
+    "voice": "af_sarah",
+    "speed": 1.0,
+    "available_voices": {
+      "af": "Adult female voice",
+      "af_bella": "Adult female voice (Bella)",
+      "af_nicole": "Adult female voice (Nicole)",
+      "af_sarah": "Adult female voice (Sarah)",
+      "af_sky": "Adult female voice (Sky)",
+      "am_adam": "Adult male voice (Adam)",
+      "am_michael": "Adult male voice (Michael)",
+      "bf_emma": "British female voice (Emma)",
+      "bf_isabella": "British female voice (Isabella)",
+      "bm_george": "British male voice (George)",
+      "bm_lewis": "British male voice (Lewis)"
+    }
+  },
+  "system": {
+    "os_type": "macos",
+    "has_location_access": true,
+    "has_screen_access": true,
+    "debug_mode": false
+  }
+}
