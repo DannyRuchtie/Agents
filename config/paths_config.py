@@ -1,11 +1,17 @@
-"""Configuration file for system paths."""
+"""Configuration for file paths used in the application."""
+
+import os
 from pathlib import Path
 
-# Main directory for all agent-related files
-AGENTS_DOCS_DIR = Path("agents_docs")
+# Base directories
+ROOT_DIR = Path(__file__).parent.parent
+CONFIG_DIR = ROOT_DIR / "config"
+AGENTS_DIR = ROOT_DIR / "agents"
+MODELS_DIR = ROOT_DIR / "models"
+UTILS_DIR = ROOT_DIR / "utils"
 
-# Ensure the main directory exists
-AGENTS_DOCS_DIR.mkdir(exist_ok=True)
+# Agent-specific directories
+AGENTS_DOCS_DIR = ROOT_DIR / "agents_docs"
 
 # Sub-directories
 DIRECTORIES = {
@@ -31,23 +37,22 @@ def get_path(directory_name: str) -> Path:
         raise ValueError(f"Unknown directory: {directory_name}")
     return DIRECTORIES[directory_name]
 
-def ensure_directories() -> None:
-    """Create all required directories if they don't exist."""
+def ensure_directories():
+    """Ensure all required directories exist."""
+    # Create base directories
+    base_dirs = [
+        CONFIG_DIR,
+        AGENTS_DIR,
+        MODELS_DIR,
+        UTILS_DIR,
+        AGENTS_DOCS_DIR,
+    ]
+    
+    for directory in base_dirs:
+        directory.mkdir(exist_ok=True)
+    
+    # Create sub-directories
     for path in DIRECTORIES.values():
         path.mkdir(parents=True, exist_ok=True)
-
-def set_root_dir(new_path: str | Path) -> None:
-    """Set a new root directory for all agent files.
-    
-    Args:
-        new_path: New root directory path
-    """
-    global AGENTS_DOCS_DIR
-    AGENTS_DOCS_DIR = Path(new_path)
-    
-    # Update all sub-directory paths
-    for key in DIRECTORIES:
-        DIRECTORIES[key] = AGENTS_DOCS_DIR / key
-    
-    # Ensure all directories exist
-    ensure_directories() 
+        
+    return True 

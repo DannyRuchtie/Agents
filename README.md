@@ -6,12 +6,12 @@ In the ever-evolving landscape of AI assistants, there's a persistent question t
 
 Unlike traditional cloud-based assistants, this system operates primarily on your local machine, creating a powerful bridge between advanced AI capabilities and your personal computing environment. It's not just another chat interface – it's a sophisticated multi-agent system that can:
 
-- 🔍 **Access Your Local Environment**: Interact with your calendar, files, and applications while keeping your data under your control
+- 🔍 **Access Your Local Environment**: Interact with your files and applications while keeping your data under your control
 - 🧠 **Build Persistent Memory**: Learn from interactions and maintain context across sessions
 - 🌐 **Combine Local & Web Resources**: Seamlessly blend local knowledge with web-sourced information
-- 🎯 **Provide Contextual Assistance**: Understand your location, schedule, and preferences to offer more relevant help
+- 🎯 **Provide Contextual Assistance**: Understand your location and preferences to offer more relevant help
 - 🔐 **Prioritize Privacy**: Keep sensitive information local and secure
-- 🎤 **Natural Voice Interaction**: Wake word detection and continuous conversation support
+- 🎤 **Natural Voice Output**: Local text-to-speech using kokoro-onnx voices
 
 ## Core Features
 
@@ -23,13 +23,10 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 - **Scanner Agent**: Document vectorization and semantic search
 - **Vision Agent**: Image analysis and screen content understanding
 - **Location Agent**: Location-aware services and recommendations
-- **Speech Agent**: Natural voice interaction with customizable voices and speeds
 - **Learning Agent**: System improvement through usage analysis
 
 ### 🎯 Key Capabilities
-- Voice interaction with wake word detection
-- Customizable voices and speech settings
-- Calendar and reminder management
+- Local text-to-speech with customizable voices
 - Document analysis and semantic search
 - Screen capture and image analysis
 - Location-aware assistance
@@ -41,7 +38,6 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 ### Prerequisites
 - Python 3.11 or higher
 - OpenAI API key
-- Picovoice API key (for wake word detection)
 - macOS (for full feature compatibility)
 
 ### Installation
@@ -65,7 +61,7 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 4. Set up your environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env with your OpenAI API key and Picovoice key
+   # Edit .env with your OpenAI API key
    ```
 
 ### Running the Assistant
@@ -73,48 +69,31 @@ Unlike traditional cloud-based assistants, this system operates primarily on you
 python main.py
 ```
 
-## Voice Interaction Guide
-
-### Wake Word Detection
-The assistant listens for the wake word "computer" before accepting commands. You can:
-1. Say "computer" to activate listening mode
-2. Speak your command when you see "Listening..."
-3. Wait for the response or continue with more commands
+## Voice Output Guide
 
 ### Voice Settings
 ```bash
-# List available voices
-list voices
+# Check voice status
+voice status
+
+# Enable/disable voice
+enable voice
+disable voice
 
 # Change voice
-set voice [name]  # Available: nova, echo, onyx, alloy, fable, shimmer
+set voice [name]  # Available: am_michael, af_bella, bf_emma, bm_george, af_sarah, af_sky
 
 # Adjust speech speed
-set speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
-
-# Enable/disable continuous listening
-continuous listening [on/off]
-
-# Adjust listening timeouts
-set wait timeout [seconds]    # Time to wait for speech to start
-set phrase timeout [seconds]  # Maximum duration of a command
+set voice speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
 ```
 
-### Voice Commands
-The assistant supports natural language commands. Examples:
-```
-"computer, what's the weather like?"
-"computer, search for latest AI news"
-"computer, summarize this document"
-"computer, take a screenshot"
-```
-
-### Continuous Conversation Mode
-Enable continuous listening to have natural back-and-forth conversations:
-1. Say "continuous listening on"
-2. Start with "computer" once
-3. Continue speaking commands without the wake word
-4. Say "stop listening" to exit continuous mode
+### Available Voices
+- `am_michael`: Adult male voice
+- `af_bella`: Adult female voice
+- `bf_emma`: British female voice
+- `bm_george`: British male voice
+- `af_sarah`: Adult female voice (default)
+- `af_sky`: Adult female voice (alternative)
 
 ## Personality Settings
 
@@ -139,7 +118,7 @@ toggle emoji [on/off]
 - All document processing happens on your machine
 - Memory storage is local and under your control
 - Web access is configurable and can be restricted
-- Voice data is processed locally except for speech-to-text conversion
+- Voice synthesis is performed locally using kokoro-onnx
 
 ## Contributing
 
@@ -147,13 +126,12 @@ This is an evolving project, and contributions are welcome! Whether it's adding 
 
 ## Future Roadmap
 
-- [ ] Additional wake word options
-- [ ] Custom wake word training
-- [ ] Offline speech-to-text support
 - [ ] Multi-language support
-- [ ] Enhanced voice activity detection
-- [ ] Voice profile customization
-- [ ] Improved continuous conversation handling
+- [ ] Enhanced voice synthesis options
+- [ ] Improved agent coordination
+- [ ] Expanded local capabilities
+- [ ] Advanced memory management
+- [ ] Custom voice profile creation
 
 ## License
 

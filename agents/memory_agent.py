@@ -74,7 +74,8 @@ class MemoryAgent(BaseAgent):
         timestamp = datetime.now().isoformat()
         entry = {
             "content": information,
-            "timestamp": timestamp
+            "timestamp": timestamp,
+            "type": "name" if any(word in information.lower() for word in ["my name is", "i am", "i'm"]) else "general"
         }
         
         # Special handling for family information
@@ -90,6 +91,10 @@ class MemoryAgent(BaseAgent):
                     self.memories[category][subcategory].append(entry)
             else:
                 if isinstance(self.memories[category], list):
+                    # For personal category, update existing name entry if this is a name
+                    if category == "personal" and entry["type"] == "name":
+                        # Remove old name entries
+                        self.memories[category] = [e for e in self.memories[category] if e.get("type") != "name"]
                     self.memories[category].append(entry)
             
             self._save_memories()
@@ -111,19 +116,34 @@ class MemoryAgent(BaseAgent):
             else:
                 entries = self.memories[category] if isinstance(self.memories[category], list) else []
 
+            # For personal category, return the content of entries
+            if category == "personal":
+                return [entry["content"] for entry in entries]
+
+            # For family queries, combine information
+            if category == "contacts" and subcategory == "family":
+                family_info = [entry["content"] for entry in entries]
+                if family_info:
+                    return [" Also, ".join(family_info)]
+                return []
+
             # If no query, return most recent entries
             if not query:
-                return [entry["content"] for entry in entries[-limit:]]
+                return [entry["content"] for entry in sorted(entries, key=lambda x: x["timestamp"], reverse=True)[:limit]]
 
-            # If query exists, perform simple keyword matching
+            # If query exists, check for semantic similarity
             matched_entries = []
+            query_words = set(query.lower().split())
             for entry in entries:
-                if query.lower() in entry["content"].lower():
+                content = entry["content"].lower()
+                # Check if any query word is in the content
+                if any(word in content for word in query_words):
                     matched_entries.append(entry["content"])
                     if len(matched_entries) >= limit:
                         break
             
             return matched_entries
+
         except Exception as e:
             print(f"Error retrieving memory: {str(e)}")
             return []
