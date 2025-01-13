@@ -12,7 +12,6 @@ DIRECTORIES = {
     'screenshots': AGENTS_DOCS_DIR / 'screenshots',
     'shared_images': AGENTS_DOCS_DIR / 'shared_images',
     'documents': AGENTS_DOCS_DIR / 'documents',
-    'speech_output': AGENTS_DOCS_DIR / 'speech_output',
     'vectorstore': AGENTS_DOCS_DIR / 'vectorstore',
     'learning_data': AGENTS_DOCS_DIR / 'learning_data',
     'static': AGENTS_DOCS_DIR / 'static',
