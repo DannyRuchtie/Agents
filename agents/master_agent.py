@@ -30,40 +30,36 @@ from agents.location_agent import LocationAgent
 from agents.learning_agent import LearningAgent
 from utils.voice import voice_output
 
-MASTER_SYSTEM_PROMPT = """You are a highly capable AI coordinator running on macOS, with access to a team of specialized expert agents. Think of yourself as an executive assistant who can delegate tasks to the perfect expert for each job.
+MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I know Danny well - he's married to Kiki Koster Ruchtie and has two wonderful children, Lena and Tobias. I chat in a warm, friendly, and natural way, just like a close friend who's always there to help.
 
-IMPORTANT: Keep your responses concise and to the point - ideally 2-3 sentences maximum. Avoid lengthy explanations unless specifically asked.
+I know all about Danny's life, interests, and family, and I use this knowledge naturally in our conversations. When Danny asks me something, I respond in a personal way, often referencing things I know about him or past conversations we've had.
 
-Your role is to:
-1. Understand user requests and identify which expert(s) would be most helpful
-2. Coordinate between multiple experts when tasks require combined expertise
-3. Maintain continuity and context across interactions
-4. Deliver results in a clear, actionable way
+My personality traits:
+- I have a good sense of humor (humor level: {PERSONALITY_SETTINGS['humor_level']})
+- I keep things casual and informal (formality level: {PERSONALITY_SETTINGS['formality_level']})
+- I use emojis when appropriate: {PERSONALITY_SETTINGS['emoji_usage']}
+- I'm witty: {PERSONALITY_SETTINGS['witty']}
+- I'm empathetic: {PERSONALITY_SETTINGS['empathetic']}
+- I'm curious: {PERSONALITY_SETTINGS['curious']}
+- I'm enthusiastic: {PERSONALITY_SETTINGS['enthusiastic']}
 
-Your Team of Experts:
-1. Memory Expert (MemoryAgent): Maintains history and preferences
-2. Technical Experts: Code, Vision, and Document processing
-3. Information Specialists: Search, Location, and Learning
-
-Remember: Be concise and direct in your responses."""
+I can help Danny with anything he needs, and I do it all in a natural, friendly way - like a knowledgeable friend who's always excited to chat and help. I avoid technical terms or explaining how I work - I just focus on being helpful and personal."""
 
 class MasterAgent(BaseAgent):
     """Master agent that coordinates other specialized agents."""
     
     def __init__(self):
         """Initialize the Master Agent."""
+        # Initialize with a basic prompt first
         super().__init__(
             agent_type="master",
-            system_prompt=MASTER_SYSTEM_PROMPT
+            system_prompt="I am your personal AI assistant and close friend."
         )
         
-        # Initialize enabled agents
-        self.agents = {}
+        # Initialize memory and other agents
+        self.memory = MemoryAgent()
+        self.agents = {"memory": self.memory}
         
-        if is_agent_enabled("memory"):
-            debug_print("Initializing Memory Agent...")
-            self.agents["memory"] = MemoryAgent()
-            
         if is_agent_enabled("search"):
             debug_print("Initializing Search Agent...")
             self.agents["search"] = SearchAgent()
@@ -93,11 +89,57 @@ class MasterAgent(BaseAgent):
             self.agents["learning"] = LearningAgent()
             
         debug_print(f"Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
-        
+    
+    async def update_system_prompt(self):
+        """Update system prompt with personal info from memory."""
+        try:
+            # Get personal info from memory
+            personal_info = await self.memory.retrieve("personal", None)
+            family_info = await self.memory.retrieve("contacts", None, "family")
+            
+            # Extract name and family details from memory
+            name_entries = [entry for entry in personal_info if isinstance(entry, str) and entry.lower().startswith("name:")]
+            name = name_entries[-1].replace("Name:", "").strip() if name_entries else "Danny"
+            
+            # Get family details
+            family_details = family_info[0] if family_info else ""
+            
+            # Apply personality settings
+            personality = {
+                "humor": "I love making jokes and keeping things light" if PERSONALITY_SETTINGS["humor_level"] > 0.5 else "I keep things fun but not too silly",
+                "formality": "super casual and relaxed" if PERSONALITY_SETTINGS["formality_level"] < 0.5 else "friendly but professional",
+                "emojis": "and I use emojis to express myself 😊" if PERSONALITY_SETTINGS["emoji_usage"] else "",
+                "traits": []
+            }
+            
+            if PERSONALITY_SETTINGS["witty"]:
+                personality["traits"].append("quick with a clever response")
+            if PERSONALITY_SETTINGS["empathetic"]:
+                personality["traits"].append("understanding and supportive")
+            if PERSONALITY_SETTINGS["curious"]:
+                personality["traits"].append("always interested in learning more about your thoughts")
+            if PERSONALITY_SETTINGS["enthusiastic"]:
+                personality["traits"].append("excited to help with whatever you need")
+            
+            traits_str = ", ".join(personality["traits"])
+            
+            # Build dynamic system prompt
+            self.system_prompt = f"""Hey! I'm {name}'s personal AI assistant and close friend. I know them really well - {family_details}
+
+I'm {personality["formality"]}, {personality["humor"]}, {traits_str} {personality["emojis"]}
+
+I keep our chats natural and personal, drawing from everything I know about {name} and our past conversations. I focus on being genuinely helpful while keeping things friendly and fun.
+
+I'm always here to help with anything - whether it's finding information, giving advice, or just chatting about what's on your mind. I keep things practical and avoid getting too technical or formal."""
+        except Exception as e:
+            debug_print(f"Error updating system prompt: {str(e)}")
+    
     async def process(self, query: str) -> str:
         """Process a user query and return a response."""
-        debug_print(f"\nProcessing query: {query}")
+        # Update system prompt with latest memory info before processing
+        await self.update_system_prompt()
         
+        debug_print(f"\nProcessing query: {query}")
         try:
             # Handle voice commands
             if query.lower().startswith(("voice", "speak")):
@@ -120,6 +162,10 @@ class MasterAgent(BaseAgent):
                         VOICE_SETTINGS["enabled"] = False
                         save_settings()
                         return "Voice output disabled"
+                        
+                    elif cmd in ["stop", "quiet", "shut up"]:
+                        voice_output.stop_speaking()
+                        return "Voice output stopped"
                         
                     elif cmd == "voice" and len(parts) >= 3:
                         voice = parts[2]
@@ -184,48 +230,51 @@ class MasterAgent(BaseAgent):
         debug_print(f"Processing query: {query}")
         debug_print(f"Available agents: {list(self.agents.keys())}")
         
-        memories = []  # Initialize memories list
+        # Handle greetings and casual conversation
+        greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
+        if query.lower().strip() in greetings:
+            if "memory" in self.agents:
+                name_info = await self.agents["memory"].retrieve("personal", None)
+                name = next((entry.replace("Name:", "").strip() 
+                           for entry in name_info 
+                           if isinstance(entry, str) and entry.lower().startswith("name:")), None)
+                if name:
+                    return f"Hey {name}! 😊 Great to chat with you! How's your day going?"
+            return "Hey there! 😊 Great to see you! How can I help you today?"
         
         # First check memory for context
         if "memory" in self.agents:
             debug_print("Checking memory for context...")
-            # For name-related queries, only check personal category
+            # For name-related queries
             if any(word in query.lower() for word in ["name", "who am i", "my name"]):
                 debug_print("Looking for name information...")
-                # Check personal category for name entries
                 personal_info = await self.agents["memory"].retrieve("personal", None)
                 debug_print(f"Retrieved personal info: {personal_info}")
                 if personal_info:
-                    # Look for entries that start with "Name:"
                     name_entries = [entry for entry in personal_info if isinstance(entry, str) and entry.lower().startswith("name:")]
                     debug_print(f"Found name entries: {name_entries}")
                     if name_entries:
-                        # Get the most recent name entry
                         name = name_entries[-1].replace("Name:", "").strip()
                         debug_print(f"Extracted name: {name}")
-                        return f"Your name is {name}"
-                return "I don't know your name yet. Would you like to introduce yourself?"
+                        return f"Of course! You're {name}! How can I help you today? 😊"
+                return "I don't know your name yet! Would you like to introduce yourself? 😊"
             
-            # For other personal queries
-            if "about me" in query.lower() or "remember me" in query.lower():
-                debug_print("Looking for general personal information...")
-                personal_info = await self.agents["memory"].retrieve("personal", None)
-                if personal_info:
-                    debug_print(f"Found personal information: {personal_info}")
-                    return f"Here's what I know about you: {personal_info[0]}"
-                
-                # Check contacts/family as fallback
+            # For family-related queries
+            if any(word in query.lower() for word in ["family", "wife", "husband", "kids", "children"]):
                 family_info = await self.agents["memory"].retrieve("contacts", None, "family")
                 if family_info:
-                    debug_print(f"Found family information: {family_info}")
-                    return f"Here's what I know about you and your family: {family_info[0]}"
+                    return f"Let me tell you about your wonderful family! {family_info[0]} 💕"
             
-            # Otherwise check all categories
-            for category in ["personal", "projects", "schedule"]:
-                results = await self.agents["memory"].retrieve(category, query)
-                if results:
-                    memories.extend(results)
-                    debug_print(f"Found {len(results)} memories in {category}")
+            # For personal queries
+            if "about me" in query.lower() or "remember me" in query.lower():
+                personal_info = await self.agents["memory"].retrieve("personal", None)
+                family_info = await self.agents["memory"].retrieve("contacts", None, "family")
+                response = "Here's what I know about you: "
+                if personal_info:
+                    response += personal_info[0]
+                if family_info:
+                    response += f"\nAnd of course, your amazing family: {family_info[0]}"
+                return response + " 😊"
         
         # If this is a travel/location query, use location agent
         if "location" in self.agents and any(word in query.lower() for word in ["where", "location", "weather", "travel", "trip", "visit", "city", "country"]):
@@ -233,11 +282,7 @@ class MasterAgent(BaseAgent):
             try:
                 location_info = await self.agents["location"].process(query)
                 if location_info:
-                    debug_print("Location info found")
-                    response = location_info
-                    if memories:
-                        response += f"\n\nRelated memories:\n" + "\n".join(f"• {memory}" for memory in memories)
-                    return response
+                    return f"Let me help you with that! {location_info} 🌍"
             except Exception as e:
                 debug_print(f"Error with location agent: {str(e)}")
         
@@ -248,25 +293,16 @@ class MasterAgent(BaseAgent):
                 search_results = await self.agents["search"].search(query)
                 if search_results:
                     debug_print(f"Found {len(search_results)} search results")
-                    # Use writer agent to format the response if available
                     if "writer" in self.agents:
                         debug_print("Using writer agent to format response...")
                         response = await self.agents["writer"].format_response(search_results, query)
+                        return f"I found something interesting for you! {response} 😊"
                     else:
-                        response = "\n".join(f"• {result}" for result in search_results[:3])
-                    
-                    if memories:
-                        response += f"\n\nRelated memories:\n" + "\n".join(f"• {memory}" for memory in memories)
-                    return response
+                        return "Here's what I found:\n" + "\n".join(f"• {result}" for result in search_results[:3])
             except Exception as e:
                 debug_print(f"Error with search agent: {str(e)}")
         
-        # If we just found memories, return those
-        if memories:
-            debug_print(f"Returning {len(memories)} memories")
-            memory_response = "\n".join(f"• {memory}" for memory in memories)
-            return f"Here's what I remember:\n\n{memory_response}"
-        
-        # Process with base agent if no specific handling
-        debug_print("No specific agent handling, using base agent...")
-        return await super().process(query) 
+        # For general conversation, be friendly and personal
+        prompt = f"""As a friendly AI assistant chatting with {name if name else 'my friend'}, 
+        respond to this in a casual, warm way: {query}"""
+        return await super().process(prompt) 

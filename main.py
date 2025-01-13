@@ -46,6 +46,14 @@ def main():
                 # Get user input
                 user_input = input("\nYou: ").strip()
                 
+                # Stop any ongoing speech when new input is received
+                voice_output.stop_speaking()
+                
+                # Handle simple stop command
+                if user_input.lower() in ["stop", "voice stop"]:
+                    print("\nAssistant: Voice output stopped")
+                    continue
+                
                 # Check for exit command
                 if user_input.lower() == "exit":
                     print("\nGoodbye! 👋")
@@ -53,7 +61,7 @@ def main():
                 
                 # Check for help command
                 if user_input.lower() == "help":
-                    help_text = "\nAvailable Commands:\nAgent Management:\n- list agents - Show all available agents and their status\n- enable agent [name] - Enable a specific agent\n- disable agent [name] - Disable a specific agent\n\nVoice Output:\n- voice status - Show voice output status\n- voice on/enable - Enable voice output\n- voice off/disable - Disable voice output\n- voice voice [name] - Change voice\n- voice speed [value] - Change voice speed (0.5-2.0)"
+                    help_text = "\nAvailable Commands:\nAgent Management:\n- list agents - Show all available agents and their status\n- enable agent [name] - Enable a specific agent\n- disable agent [name] - Disable a specific agent\n\nVoice Output:\n- voice status - Show voice output status\n- voice on/enable - Enable voice output\n- voice off/disable - Disable voice output\n- voice stop/stop - Stop current speech\n- voice voice [name] - Change voice\n- voice speed [value] - Change voice speed (0.5-2.0)"
                     print(help_text)
                     if VOICE_SETTINGS["enabled"]:
                         voice_output.speak(help_text)
