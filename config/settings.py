@@ -37,6 +37,10 @@ AGENT_SETTINGS = {
     "learning": {
         "enabled": True,
         "description": "Improves system through conversation monitoring"
+    },
+    "personality_agent": {
+        "enabled": True,
+        "description": "Learns and adapts to user's personality and preferences"
     }
 }
 
@@ -49,6 +53,36 @@ PERSONALITY_SETTINGS = {
     "empathetic": True,
     "curious": True,
     "enthusiastic": True
+}
+
+# Personality Settings
+PERSONALITY_TRAITS = {
+    "communication_style": {
+        "formality_level": 0.3,  # 0 = very casual, 1 = very formal
+        "verbosity": 0.6,  # 0 = concise, 1 = detailed
+        "humor_level": 0.7,  # 0 = serious, 1 = playful
+        "emoji_usage": True,  # Whether to use emojis
+    },
+    "interests": [],  # List of user's interests
+    "preferences": {
+        "learning_style": "visual",  # visual, auditory, reading, kinesthetic
+        "communication_medium": "text",  # text, voice, mixed
+        "response_length": "medium",  # short, medium, long
+        "technical_level": "medium",  # basic, medium, advanced
+    },
+    "traits": {
+        "openness": 0.8,  # Openness to new experiences
+        "conscientiousness": 0.7,  # Attention to detail
+        "extraversion": 0.6,  # Social energy level
+        "agreeableness": 0.8,  # Warmth in interactions
+        "neuroticism": 0.3,  # Emotional sensitivity
+    },
+    "interaction_history": {
+        "preferred_topics": [],  # Topics user frequently discusses
+        "avoided_topics": [],  # Topics user tends to avoid
+        "peak_activity_times": [],  # Times when user is most active
+        "typical_session_length": "medium",  # short, medium, long
+    }
 }
 
 # Voice settings
@@ -83,32 +117,41 @@ SYSTEM_SETTINGS = {
 SETTINGS_FILE = Path("config/settings.json")
 
 def save_settings():
-    """Save settings to JSON file."""
+    """Save current settings to file."""
     settings = {
-        "agents": AGENT_SETTINGS,
-        "personality": PERSONALITY_SETTINGS,
-        "voice": VOICE_SETTINGS,
-        "system": SYSTEM_SETTINGS
+        "agent_settings": AGENT_SETTINGS,
+        "personality_settings": PERSONALITY_SETTINGS,
+        "personality_traits": PERSONALITY_TRAITS,
+        "voice_settings": VOICE_SETTINGS,
+        "system_settings": SYSTEM_SETTINGS
     }
     
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f, indent=2)
-        
-def load_settings():
-    """Load settings from JSON file."""
     try:
-        with open(SETTINGS_FILE, 'r') as f:
-            settings = json.load(f)
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(settings, f, indent=2)
+        debug_print("Settings saved successfully")
+    except Exception as e:
+        debug_print(f"Error saving settings: {str(e)}")
+
+def load_settings():
+    """Load settings from file."""
+    global AGENT_SETTINGS, PERSONALITY_SETTINGS, PERSONALITY_TRAITS, VOICE_SETTINGS, SYSTEM_SETTINGS
+    
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, 'r') as f:
+                settings = json.load(f)
+                
+            AGENT_SETTINGS.update(settings.get("agent_settings", {}))
+            PERSONALITY_SETTINGS.update(settings.get("personality_settings", {}))
+            PERSONALITY_TRAITS.update(settings.get("personality_traits", {}))
+            VOICE_SETTINGS.update(settings.get("voice_settings", {}))
+            SYSTEM_SETTINGS.update(settings.get("system_settings", {}))
             
-        AGENT_SETTINGS.update(settings.get("agents", {}))
-        PERSONALITY_SETTINGS.update(settings.get("personality", {}))
-        VOICE_SETTINGS.update(settings.get("voice", {}))
-        SYSTEM_SETTINGS.update(settings.get("system", {}))
-            
-    except FileNotFoundError:
-        # Use defaults if file not found
-        save_settings()
-        
+            debug_print("Settings loaded successfully")
+        except Exception as e:
+            debug_print(f"Error loading settings: {str(e)}")
+
 def is_agent_enabled(agent_name: str) -> bool:
     """Check if an agent is enabled."""
     return AGENT_SETTINGS.get(agent_name, {}).get("enabled", False)
@@ -153,9 +196,5 @@ def debug_print(message: str):
     if is_debug_mode():
         print(f"[DEBUG] {message}")
 
-# Load settings at startup
-try:
-    load_settings()
-except Exception as e:
-    print(f"Error loading settings: {e}")
-    # Use defaults if settings file not found 
+# Load settings on module import
+load_settings() 
