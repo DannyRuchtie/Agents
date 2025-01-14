@@ -1,9 +1,13 @@
 """Base agent module providing common functionality for all agents."""
 from typing import Any, Dict, Optional, List
 from datetime import datetime
+import os
 
 from config.openai_config import get_client, get_agent_config
+from config.settings import debug_print
 
+# Image file extensions that should be routed to vision agent
+IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
 
 class BaseAgent:
     """Base agent class with common functionality."""
@@ -30,6 +34,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
         self.max_history = max_history
         self.conversation_history: List[Dict[str, str]] = []
         self.conversation_start = datetime.now()
+        self.agent_type = agent_type
         
         # Set more conversational parameters
         if "temperature" not in self.config:
@@ -39,6 +44,33 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
         if "frequency_penalty" not in self.config:
             self.config["frequency_penalty"] = 0.5  # Discourage repetitive responses
     
+    def _is_image_path(self, text: str) -> bool:
+        """Check if the text contains a valid image file path."""
+        # Extract potential file paths from text
+        words = text.split()
+        for word in words:
+            # Remove quotes if present
+            word = word.strip("'\"")
+            if os.path.exists(word):
+                ext = os.path.splitext(word)[1].lower()
+                if ext in IMAGE_EXTENSIONS:
+                    return True
+        return False
+
+    def _extract_image_path(self, text: str) -> tuple[str, str]:
+        """Extract image path and remaining query from text."""
+        words = text.split()
+        for i, word in enumerate(words):
+            # Remove quotes if present
+            word = word.strip("'\"")
+            if os.path.exists(word):
+                ext = os.path.splitext(word)[1].lower()
+                if ext in IMAGE_EXTENSIONS:
+                    # Return the path and the rest of the query
+                    remaining_words = words[:i] + words[i+1:]
+                    return word, ' '.join(remaining_words)
+        return '', text
+
     def _trim_history(self) -> None:
         """Trim conversation history to max_history message pairs."""
         if len(self.conversation_history) > self.max_history * 2:
@@ -51,29 +83,43 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             *self.conversation_history
         ]
     
-    async def process(self, input_text: str, **kwargs: Any) -> str:
+    async def process(self, input_text: str, messages: Optional[List[Dict[str, str]]] = None, **kwargs: Any) -> str:
         """Process the input text and return a response."""
         try:
+            # Check if this is an image request and we're not already the vision agent
+            if self.agent_type != "vision" and self._is_image_path(input_text):
+                from agents.vision_agent import VisionAgent
+                vision_agent = VisionAgent()
+                image_path, query = self._extract_image_path(input_text)
+                return await vision_agent.analyze_image(image_path, query)
+            
             # Handle common greetings more naturally
-            greetings = ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]
-            if input_text.lower().strip() in greetings:
+            if not messages and input_text.lower().strip() in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]:
                 return "Hey! Great to see you! How can I help you today? 😊"
             
-            # Get current context window with system prompt and history
-            messages = self.get_context_window()
-            messages.append({"role": "user", "content": input_text})
+            # Use provided messages or build from context window
+            if messages:
+                # For vision messages, use them directly without modification
+                if any(isinstance(msg.get('content'), list) and 
+                      any(item.get('type') == 'image_url' for item in msg['content']) 
+                      for msg in messages):
+                    pass
+                else:
+                    messages = [{"role": "system", "content": self.system_prompt}, *messages]
+            else:
+                messages = self.get_context_window()
+                messages.append({"role": "user", "content": input_text})
             
             # Extract model configuration
             config = {
-                "model": self.config["model"],
-                "temperature": self.config.get("temperature", 0.7),
-                "max_tokens": self.config.get("max_tokens", 4096),
-                "seed": self.config.get("seed"),
-                "response_format": self.config.get("response_format", {"type": "text"})
+                "model": kwargs.get("model", self.config["model"]),  # Allow model override
+                "temperature": kwargs.get("temperature", self.config.get("temperature", 0.7)),
+                "max_tokens": kwargs.get("max_tokens", self.config.get("max_tokens", 4096)),
+                "seed": kwargs.get("seed", self.config.get("seed")),
+                "response_format": kwargs.get("response_format", self.config.get("response_format", {"type": "text"}))
             }
-            config.update(kwargs)
             
-            # Make the API call without await
+            # Make the API call
             completion = self.client.chat.completions.create(
                 messages=messages,
                 **config
@@ -82,17 +128,15 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             # Extract assistant's response
             assistant_message = completion.choices[0].message.content
             
-            # Update conversation history
-            self.conversation_history.append({"role": "user", "content": input_text})
-            self.conversation_history.append({"role": "assistant", "content": assistant_message})
-            
-            # Trim history if needed
-            self._trim_history()
+            # Only update conversation history if using standard input
+            if not messages:
+                self.conversation_history.append({"role": "user", "content": input_text})
+                self.conversation_history.append({"role": "assistant", "content": assistant_message})
+                self._trim_history()
             
             return assistant_message
             
         except Exception as e:
-            print(f"Error in OpenAI API call: {str(e)}")
             return f"I encountered an error: {str(e)}"
     
     def clear_history(self) -> None:
