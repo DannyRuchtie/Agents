@@ -130,6 +130,99 @@ set voice speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
 - `af_sarah`: Adult female voice (default)
 - `af_sky`: Adult female voice (alternative)
 
+## API Documentation
+
+### Base URL
+```
+http://localhost:8000
+```
+
+### Endpoints
+
+#### Status Check
+```bash
+GET /
+
+Response:
+{
+    "status": "ok",
+    "message": "Agents API is running",
+    "version": "1.0.0"
+}
+```
+
+#### Send Query
+```bash
+POST /query
+Content-Type: application/json
+
+Request Body:
+{
+    "query": "your question here"
+}
+
+Response:
+{
+    "status": "success",
+    "response": "assistant's response"
+}
+```
+
+#### List Agents
+```bash
+GET /agents
+
+Response:
+{
+    "agents": [
+        {
+            "type": "memory",
+            "enabled": true
+        },
+        {
+            "type": "search",
+            "enabled": true
+        },
+        // ... other agents
+    ],
+    "total": 8
+}
+```
+
+#### Voice Control
+```bash
+# Get voice status
+GET /voice/status
+
+Response:
+{
+    "status": "success",
+    "voice_enabled": true,
+    "current_voice": "af_sarah",
+    "speed": 1.0,
+    "available_voices": ["am_michael", "af_bella", "bf_emma", "bm_george", "af_sarah", "af_sky"]
+}
+
+# Enable voice
+POST /voice/enable
+
+# Disable voice
+POST /voice/disable
+```
+
+### Error Responses
+All endpoints may return the following error structure:
+```json
+{
+    "status": "error",
+    "message": "Error description"
+}
+```
+
+### Rate Limiting
+- Default rate limit: 60 requests per minute
+- Endpoints return 429 Too Many Requests if rate limit is exceeded
+
 ## Personality Settings
 
 The assistant's personality can be customized:
