@@ -131,7 +131,13 @@ I keep our chats natural and personal, drawing from everything I know about {nam
         
         debug_print(f"\nProcessing query: {query}")
         try:
-            # Process the query
+            # Check if this is a search query
+            search_keywords = ["search", "look up", "find", "what is", "who is", "tell me about"]
+            if any(keyword in query.lower() for keyword in search_keywords) and "search" in self.agents:
+                debug_print("Using search agent to process query")
+                return await self.agents["search"].process(query)
+            
+            # Process with other agents if not a search query
             response = await super().process(query)
             
             # Update personality insights if enabled
