@@ -73,6 +73,7 @@ so I'll focus on those areas while keeping it practical and relevant to your wor
 ### Prerequisites
 - Python 3.11 or higher
 - OpenAI API key
+- Google Custom Search API key (for web search)
 - macOS (for full feature compatibility)
 
 ### Installation
@@ -96,13 +97,40 @@ so I'll focus on those areas while keeping it practical and relevant to your wor
 4. Set up your environment variables:
    ```bash
    cp .env.example .env
-   # Edit .env with your OpenAI API key
+   ```
+   
+   Configure the following in your `.env` file:
+   ```bash
+   # OpenAI Configuration
+   OPENAI_API_KEY=your_openai_api_key
+   
+   # Google Custom Search Configuration
+   GOOGLE_API_KEY=your_google_api_key
+   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
+   
+   # Voice Settings (optional)
+   DEFAULT_VOICE=af_sarah
+   DEFAULT_VOICE_SPEED=1.0
+   
+   # API Configuration
+   API_HOST=localhost
+   API_PORT=8000
+   RATE_LIMIT=60  # requests per minute
    ```
 
 ### Running the Assistant
+Start the API server:
 ```bash
-python main.py
+python -m api.run
 ```
+
+For the macOS app:
+1. Open the Xcode project in the `AgentAssistant` directory
+2. Build and run the project
+3. The app will appear as a floating window with a black circle
+
+### Available Endpoints
+All API endpoints are available at `http://localhost:8000` by default. See the API Documentation section for details.
 
 ## Voice Output Guide
 
@@ -242,11 +270,12 @@ toggle emoji [on/off]
 
 ## Security Notes
 
-- API keys are stored locally in your .env file
+- API keys (OpenAI and Google) are stored locally in your .env file
 - All document processing happens on your machine
 - Memory storage is local and under your control
 - Web access is configurable and can be restricted
 - Voice synthesis is performed locally using kokoro-onnx
+- Rate limiting is enabled by default to prevent API abuse
 
 ## Contributing
 
@@ -254,7 +283,6 @@ This is an evolving project, and contributions are welcome! Whether it's adding 
 
 ## Future Roadmap
 
-- [ ] Multi-language support
 - [ ] Enhanced voice synthesis options
 - [ ] Improved agent coordination
 - [ ] Expanded local capabilities
