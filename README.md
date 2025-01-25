@@ -238,18 +238,133 @@ POST /voice/enable
 POST /voice/disable
 ```
 
-### Error Responses
-All endpoints may return the following error structure:
-```json
-{
-    "status": "error",
-    "message": "Error description"
-}
-```
-
 ### Rate Limiting
 - Default rate limit: 60 requests per minute
 - Endpoints return 429 Too Many Requests if rate limit is exceeded
+
+## Chat Integration Guide
+
+### Implementing Chat in External Applications
+
+Here's how to implement a chat interface using the API:
+
+```python
+import requests
+import json
+
+class AgentChatClient:
+    def __init__(self, base_url="http://localhost:8000"):
+        self.base_url = base_url
+        
+    def check_connection(self):
+        response = requests.get(f"{self.base_url}/")
+        return response.status_code == 200
+    
+    def send_message(self, message):
+        response = requests.post(
+            f"{self.base_url}/query",
+            json={"query": message},
+            headers={"Content-Type": "application/json"}
+        )
+        return response.json()
+```
+
+### Example Usage
+
+```python
+# Initialize the chat client
+chat = AgentChatClient()
+
+# Check if API is available
+if chat.check_connection():
+    # Start a conversation
+    response = chat.send_message("Hello! How are you?")
+    print(response['response'])
+    
+    # Continue the conversation (context is maintained by the API)
+    response = chat.send_message("What was my previous message?")
+    print(response['response'])
+```
+
+### Swift Implementation
+
+For iOS/macOS applications:
+
+```swift
+class AgentChat {
+    private let baseURL = "http://localhost:8000"
+    
+    func sendMessage(_ message: String) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/query") else {
+            throw URLError(.badURL)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body = ["query": message]
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        let (data, _) = try await URLSession.shared.data(for: request)
+        let response = try JSONDecoder().decode(QueryResponse.self, from: data)
+        return response.response
+    }
+}
+
+// Usage in SwiftUI
+struct ChatView: View {
+    @State private var messages: [Message] = []
+    @State private var newMessage = ""
+    private let chat = AgentChat()
+    
+    var body: some View {
+        VStack {
+            // Messages list
+            ScrollView {
+                ForEach(messages) { message in
+                    MessageRow(message: message)
+                }
+            }
+            
+            // Input field
+            HStack {
+                TextField("Type a message...", text: $newMessage)
+                Button("Send") {
+                    Task {
+                        await sendMessage()
+                    }
+                }
+            }
+        }
+    }
+    
+    func sendMessage() async {
+        do {
+            let response = try await chat.sendMessage(newMessage)
+            messages.append(Message(text: newMessage, isUser: true))
+            messages.append(Message(text: response, isUser: false))
+            newMessage = ""
+        } catch {
+            print("Error: \(error)")
+        }
+    }
+}
+```
+
+### Key Features
+- Messages are processed in context (the API maintains conversation history)
+- Responses include the assistant's personality traits
+- Support for both synchronous and asynchronous implementations
+- Error handling for network and API issues
+- Rate limiting compliance built into examples
+
+### Best Practices
+1. Implement retry logic for failed requests
+2. Handle rate limiting (429) responses gracefully
+3. Show loading states during API calls
+4. Maintain local message history for offline viewing
+5. Implement proper error handling and user feedback
 
 ## Personality Settings
 
