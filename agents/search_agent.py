@@ -3,6 +3,7 @@ import os
 from typing import List, Dict, Optional
 import aiohttp
 from urllib.parse import quote_plus
+from bs4 import BeautifulSoup
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
@@ -126,6 +127,50 @@ class SearchAgent(BaseAgent):
                 raise
             raise Exception(f"An unexpected error occurred in search: {str(e)}")
     
+    async def _fetch_and_extract_text(self, url: str, session: aiohttp.ClientSession) -> Optional[str]:
+        """Fetch HTML content from a URL and extract clean text."""
+        try:
+            debug_print(f"SearchAgent: Fetching content from URL: {url}")
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            async with session.get(url, headers=headers, timeout=10) as response:
+                if response.status != 200:
+                    debug_print(f"SearchAgent: Failed to fetch {url}. Status: {response.status}")
+                    return None
+                
+                html_content = await response.text()
+                soup = BeautifulSoup(html_content, "html.parser")
+                
+                # Remove script and style elements
+                for script_or_style in soup(["script", "style"]):
+                    script_or_style.decompose()
+                
+                # Get text
+                text = soup.get_text()
+                
+                # Break into lines and remove leading/trailing space on each
+                lines = (line.strip() for line in text.splitlines())
+                # Break multi-headlines into a line each
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                # Drop blank lines
+                text = '\n'.join(chunk for chunk in chunks if chunk)
+                
+                if not text:
+                    debug_print(f"SearchAgent: No text extracted from {url}")
+                    return None
+                
+                debug_print(f"SearchAgent: Successfully extracted text from {url} (length: {len(text)})")
+                # Limit text to avoid overly long prompts (e.g., first 15000 chars)
+                # This limit should ideally be based on token count for the LLM
+                return text[:15000]
+        except aiohttp.ClientError as e:
+            debug_print(f"SearchAgent: Network error fetching {url}: {str(e)}")
+            return None
+        except Exception as e:
+            debug_print(f"SearchAgent: Error fetching or parsing {url}: {str(e)}")
+            return None
+
     def format_results(self, results: List[SearchResult]) -> str:
         """Format search results into a conversational, friendly response.
         
@@ -151,59 +196,43 @@ class SearchAgent(BaseAgent):
         return "\n".join(formatted)
     
     async def process(self, query: str) -> str:
-        """Process a search query and return formatted results in a friendly manner.
-        
-        Args:
-            query: The search query
-            
-        Returns:
-            Conversational response with search results
-        """
+        """Process a search query, fetch content from the top result, and provide a summary."""
         debug_print(f"SearchAgent: Processing query: '{query}'")
         try:
-            # Perform the search
-            results = await self.search(query)
+            # Perform the initial search
+            search_results = await self.search(query)
             
-            # This part is effectively handled by exceptions from self.search now,
-            # but keeping it as a fallback or for clarity.
-            if not results: 
-                return "I tried searching but couldn't find anything specific. Maybe we could try a different search term?"
-            
-            # Format the results in a friendly way
-            formatted_results = self.format_results(results)
-            
-            # Generate a conversational summary using the language model
-            # If we want the summary to be streamed, super().process needs to handle streaming
-            # and this method should yield from it or handle chunks.
-            # For now, assuming super().process returns a complete string.
-            
-            # Constructing the prompt for the LLM to summarize the search results
-            # This part is where the BaseAgent's LLM is used.
-            # The SearchAgent's role is to fetch, format, and then pass to BaseAgent for summarization.
-            # The BaseAgent's process method should handle the streaming if stream=True was passed to its client.
-            
-            # We want to show the raw results first, then the summary.
-            # So, we'll return the formatted_results, and let the MasterAgent (or user) decide if a summary is needed.
-            # For now, SearchAgent will just return the formatted list.
-            # The "summary" part by calling super().process here would make SearchAgent call an LLM,
-            # which might be redundant if MasterAgent is already an LLM.
+            if not search_results:
+                return "I tried searching but couldn't find anything specific online. Maybe try rephrasing?"
 
-            # Let's simplify: SearchAgent's job is to get and format search results.
-            # The summarization can be a higher-level task.
-            # So, we'll return formatted_results directly.
+            # Format the initial list of results (fallback or for context)
+            formatted_initial_results = self.format_results(search_results)
 
-            # The prompt and summary generation using super().process can be removed from SearchAgent
-            # if the intention is for SearchAgent to *only* fetch and format, not summarize using its own LLM.
-            # This simplifies SearchAgent and avoids nested LLM calls if MasterAgent is already summarizing.
+            # Try to fetch and summarize the top result
+            top_result = search_results[0]
+            debug_print(f"SearchAgent: Attempting to fetch and summarize top result: {top_result.link}")
 
-            # Based on previous discussions, MasterAgent calls the specialist agent, and the specialist
-            # agent (like SearchAgent) processes and returns its findings. MasterAgent then formulates the final response.
-            # So, SearchAgent should just return its direct findings.
-            
-            debug_print(f"SearchAgent: Successfully found and formatted {len(results)} results.")
-            return formatted_results # Return directly formatted results
+            async with aiohttp.ClientSession() as session: # Create a session for fetching content
+                extracted_text = await self._fetch_and_extract_text(top_result.link, session)
+
+            if extracted_text:
+                debug_print(f"SearchAgent: Successfully extracted text from top result. Length: {len(extracted_text)}. Now summarizing.")
+                prompt_for_summary = (
+                    f"Based on the following text from the webpage titled '{top_result.title}' ({top_result.link}), "
+                    f"please answer the user's question: '{query}'.\n\n"
+                    f"Extracted Text:\n{extracted_text}\n\n"
+                    f"Please provide a concise answer to the question based *only* on this text. "
+                    f"If the text doesn't answer the question, say so."
+                )
+                
+                # Use the BaseAgent's LLM to process the summary prompt
+                summary_answer = await super().process(prompt_for_summary)
+                
+                return f"{summary_answer}\n\nSource: {top_result.title} - {top_result.link}"
+            else:
+                debug_print("SearchAgent: Could not extract text from top result or an error occurred. Falling back to list.")
+                return f"I found some search results, but couldn't fully read the top page. Here's a list:\n{formatted_initial_results}"
 
         except Exception as e:
             debug_print(f"SearchAgent: Error processing search query '{query}': {str(e)}")
-            # Return a user-friendly message including the specific error
             return f"Sorry, I encountered an issue while searching for '{query}'. Details: {str(e)}" 
