@@ -6,6 +6,7 @@ import select
 import threading
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 
 from agents.master_agent import MasterAgent
 from agents.memory_agent import MemoryAgent
@@ -80,6 +81,25 @@ async def process_input(master_agent: MasterAgent, user_input: str):
 
 def main():
     """Run the main chat interface."""
+    # Load environment variables from .env file
+    # Construct an absolute path to the .env file in the script's directory's parent (project root)
+    script_dir = Path(__file__).resolve().parent
+    env_path = script_dir / ".env" # Assumes .env is in the same directory as main.py
+    # If main.py is in a subdirectory like 'src', and .env is in the project root, adjust accordingly:
+    # env_path = script_dir.parent / ".env"
+    
+    print(f"[DEBUG] Attempting to load .env file from: {env_path}")
+    # Load .env, override existing env vars if any, and be verbose if file not found
+    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=True)
+    print(f"[DEBUG] load_dotenv successful: {loaded_successfully}")
+
+    # ---- TEMPORARY DEBUG ----
+    # loaded_google_api_key = os.getenv("GOOGLE_API_KEY")
+    # loaded_google_cse_id = os.getenv("GOOGLE_CSE_ID")
+    # print(f"[DEBUG] Loaded GOOGLE_API_KEY: {loaded_google_api_key}")
+    # print(f"[DEBUG] Loaded GOOGLE_CSE_ID: {loaded_google_cse_id}")
+    # ---- END TEMPORARY DEBUG ----
+
     # Ensure directories exist
     ensure_directories()
     
