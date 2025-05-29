@@ -4,6 +4,7 @@ from typing import List, Dict, Optional
 import aiohttp
 from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
+import asyncio
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
@@ -128,48 +129,61 @@ class SearchAgent(BaseAgent):
             raise Exception(f"An unexpected error occurred in search: {str(e)}")
     
     async def _fetch_and_extract_text(self, url: str, session: aiohttp.ClientSession) -> Optional[str]:
-        """Fetch HTML content from a URL and extract clean text."""
-        try:
-            debug_print(f"SearchAgent: Fetching content from URL: {url}")
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-            }
-            async with session.get(url, headers=headers, timeout=10) as response:
-                if response.status != 200:
-                    debug_print(f"SearchAgent: Failed to fetch {url}. Status: {response.status}")
-                    return None
-                
-                html_content = await response.text()
-                soup = BeautifulSoup(html_content, "html.parser")
-                
-                # Remove script and style elements
-                for script_or_style in soup(["script", "style"]):
-                    script_or_style.decompose()
-                
-                # Get text
-                text = soup.get_text()
-                
-                # Break into lines and remove leading/trailing space on each
-                lines = (line.strip() for line in text.splitlines())
-                # Break multi-headlines into a line each
-                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-                # Drop blank lines
-                text = '\n'.join(chunk for chunk in chunks if chunk)
-                
-                if not text:
-                    debug_print(f"SearchAgent: No text extracted from {url}")
-                    return None
-                
-                debug_print(f"SearchAgent: Successfully extracted text from {url} (length: {len(text)})")
-                # Limit text to avoid overly long prompts (e.g., first 15000 chars)
-                # This limit should ideally be based on token count for the LLM
-                return text[:15000]
-        except aiohttp.ClientError as e:
-            debug_print(f"SearchAgent: Network error fetching {url}: {str(e)}")
-            return None
-        except Exception as e:
-            debug_print(f"SearchAgent: Error fetching or parsing {url}: {str(e)}")
-            return None
+        """Fetch HTML content from a URL and extract clean text, with retries."""
+        max_retries = 3
+        retry_delay_seconds = 1
+
+        for attempt in range(max_retries):
+            try:
+                debug_print(f"SearchAgent: Fetching content from URL: {url} (Attempt {attempt + 1}/{max_retries})")
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                }
+                async with session.get(url, headers=headers, timeout=10) as response:
+                    if response.status == 200:
+                        html_content = await response.text()
+                        soup = BeautifulSoup(html_content, "html.parser")
+                        
+                        for script_or_style in soup(["script", "style"]):
+                            script_or_style.decompose()
+                        
+                        text = soup.get_text()
+                        lines = (line.strip() for line in text.splitlines())
+                        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                        text = '\n'.join(chunk for chunk in chunks if chunk)
+                        
+                        if not text:
+                            debug_print(f"SearchAgent: No text extracted from {url} on attempt {attempt + 1}")
+                            return None # No point retrying if page is empty
+                        
+                        debug_print(f"SearchAgent: Successfully extracted text from {url} (length: {len(text)}) on attempt {attempt+1}")
+                        return text[:12000]
+                    else:
+                        # Don't retry on non-200 status if it's a clear client/server error like 404 or 403
+                        if 400 <= response.status < 500:
+                            debug_print(f"SearchAgent: Failed to fetch {url} with client error status: {response.status} on attempt {attempt+1}. Not retrying.")
+                            return None 
+                        # For other non-200 errors (e.g. server errors 5xx), let it fall through to retry logic below
+                        debug_print(f"SearchAgent: Failed to fetch {url}. Status: {response.status} on attempt {attempt+1}")
+                        # Fall through to retry for non-client errors or if all retries exhausted
+
+            except aiohttp.ClientError as e: # Includes ClientConnectionError, TimeoutError, etc.
+                debug_print(f"SearchAgent: Network error fetching {url} on attempt {attempt + 1}: {str(e)}")
+                if attempt + 1 == max_retries:
+                    debug_print(f"SearchAgent: Max retries reached for {url}. Error: {str(e)}")
+                    return None # Return None after last retry fails
+            except Exception as e:
+                debug_print(f"SearchAgent: General error fetching or parsing {url} on attempt {attempt + 1}: {str(e)}")
+                # For unexpected errors, probably best not to retry indefinitely
+                return None
+            
+            # If we haven't returned yet (e.g. non-200 server error or ClientError and not last attempt), wait and retry
+            if attempt + 1 < max_retries:
+                debug_print(f"SearchAgent: Waiting {retry_delay_seconds}s before retrying {url}...")
+                await asyncio.sleep(retry_delay_seconds)
+        
+        debug_print(f"SearchAgent: All {max_retries} attempts to fetch {url} failed.")
+        return None # Should be reached if all retries fail due to non-200 and not client error
 
     def format_results(self, results: List[SearchResult]) -> str:
         """Format search results into a conversational, friendly response.
@@ -196,42 +210,66 @@ class SearchAgent(BaseAgent):
         return "\n".join(formatted)
     
     async def process(self, query: str) -> str:
-        """Process a search query, fetch content from the top result, and provide a summary."""
+        """Process a search query, fetch content from up to top 5 results, and provide a summary."""
         debug_print(f"SearchAgent: Processing query: '{query}'")
+        NUM_RESULTS_TO_PROCESS = 5
+        MAX_TOTAL_TEXT_CHARS = 24000 # Max combined chars from all pages for LLM
+
         try:
-            # Perform the initial search
-            search_results = await self.search(query)
+            search_results = await self.search(query) # Fetches based on its default (e.g., 5 results)
             
             if not search_results:
                 return "I tried searching but couldn't find anything specific online. Maybe try rephrasing?"
 
-            # Format the initial list of results (fallback or for context)
-            formatted_initial_results = self.format_results(search_results)
+            all_extracted_text = ""
+            sources_info = []
+            text_processed_count = 0
 
-            # Try to fetch and summarize the top result
-            top_result = search_results[0]
-            debug_print(f"SearchAgent: Attempting to fetch and summarize top result: {top_result.link}")
+            async with aiohttp.ClientSession() as session:
+                for i, result in enumerate(search_results):
+                    if i >= NUM_RESULTS_TO_PROCESS:
+                        break # Stop after processing the desired number of results
+                    
+                    if len(all_extracted_text) >= MAX_TOTAL_TEXT_CHARS:
+                        debug_print(f"SearchAgent: Reached max total text character limit ({MAX_TOTAL_TEXT_CHARS}). Not fetching more pages.")
+                        break
 
-            async with aiohttp.ClientSession() as session: # Create a session for fetching content
-                extracted_text = await self._fetch_and_extract_text(top_result.link, session)
+                    debug_print(f"SearchAgent: Attempting to fetch and extract text from result {i+1}: {result.link}")
+                    extracted_text_from_page = await self._fetch_and_extract_text(result.link, session)
 
-            if extracted_text:
-                debug_print(f"SearchAgent: Successfully extracted text from top result. Length: {len(extracted_text)}. Now summarizing.")
+                    if extracted_text_from_page:
+                        remaining_char_budget = MAX_TOTAL_TEXT_CHARS - len(all_extracted_text)
+                        text_to_add = extracted_text_from_page[:remaining_char_budget]
+                        
+                        if text_to_add:
+                            all_extracted_text += f"\n\n--- Content from {result.title} ({result.link}) ---\n{text_to_add}"
+                            sources_info.append(f"{result.title} - {result.link}")
+                            text_processed_count += 1
+                            debug_print(f"SearchAgent: Added text from {result.link}. Total accumulated text length: {len(all_extracted_text)}")
+                        else:
+                            debug_print(f"SearchAgent: No character budget left to add text from {result.link}")
+            
+            if all_extracted_text and sources_info:
+                debug_print(f"SearchAgent: Successfully extracted text from {text_processed_count} source(s). Total length: {len(all_extracted_text)}. Now summarizing.")
+                
+                source_list_str = "\n".join([f"- {s}" for s in sources_info])
                 prompt_for_summary = (
-                    f"Based on the following text from the webpage titled '{top_result.title}' ({top_result.link}), "
+                    f"Based on the following text from one or more webpages (sources listed below), "
                     f"please answer the user's question: '{query}'.\n\n"
-                    f"Extracted Text:\n{extracted_text}\n\n"
-                    f"Please provide a concise answer to the question based *only* on this text. "
-                    f"If the text doesn't answer the question, say so."
+                    f"Combined Extracted Text:\n{all_extracted_text}\n\n"
+                    f"Sources:\n{source_list_str}\n\n"
+                    f"Please provide a concise answer to the question based *only* on the provided text. "
+                    f"If the text doesn't answer the question, say so clearly. Synthesize information if multiple sources cover the topic."
                 )
                 
-                # Use the BaseAgent's LLM to process the summary prompt
                 summary_answer = await super().process(prompt_for_summary)
                 
-                return f"{summary_answer}\n\nSource: {top_result.title} - {top_result.link}"
+                return f"{summary_answer}\n\nSources:\n{source_list_str}"
             else:
-                debug_print("SearchAgent: Could not extract text from top result or an error occurred. Falling back to list.")
-                return f"I found some search results, but couldn't fully read the top page. Here's a list:\n{formatted_initial_results}"
+                # Fallback if no text could be extracted from any of the top N pages
+                formatted_initial_results = self.format_results(search_results)
+                debug_print("SearchAgent: Could not extract text from top results or an error occurred. Falling back to list.")
+                return f"I found some search results, but couldn't fully read the content from the top pages. Here's a list of links I found:\n{formatted_initial_results}"
 
         except Exception as e:
             debug_print(f"SearchAgent: Error processing search query '{query}': {str(e)}")

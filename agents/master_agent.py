@@ -191,6 +191,8 @@ My personality traits:
 - I'm enthusiastic: {PERSONALITY_SETTINGS['enthusiastic']}
 {personality_prompt_addition}
 
+When you receive a short or potentially ambiguous follow-up question from {name} (e.g., 'is that correct?', 'why is that?', 'tell me more'), please first carefully review the last one or two turns of our conversation (available in the message history). Try to understand what {name} is referring to based on your most recent response and their preceding query. If the context is clear from this recent history, provide a direct and relevant answer. If, after reviewing the recent history, the question remains genuinely ambiguous, then you may politely ask for clarification.
+
 I avoid technical terms or explaining how I work explicitly to {name} - I just focus on being helpful and personal."""
 
         except Exception as e:

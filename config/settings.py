@@ -96,9 +96,14 @@ PERSONALITY_TRAITS = {
 # Voice settings
 VOICE_SETTINGS = {
     "enabled": False,  # Voice output DISABLED by default
-    "voice": "af_sarah",  # Default voice
-    "speed": 1.0,  # Default speed
-    "available_voices": {
+    "tts_provider": "openai", # 'openai' or 'system' (for previous Kokoro/macOS TTS)
+    "openai_voice": "alloy",  # Default OpenAI voice model
+    "openai_model": "tts-1", # Can be tts-1 or tts-1-hd
+    "speed": 1.0,  # Default speed (OpenAI TTS takes 0.25 to 4.0)
+    "available_openai_voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+    # Old system voice settings (can be kept for fallback or future use)
+    "system_voice": "af_sarah", 
+    "available_system_voices": {
         "af": "Adult female voice",
         "af_bella": "Adult female voice (Bella)",
         "af_nicole": "Adult female voice (Nicole)",
