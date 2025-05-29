@@ -275,13 +275,15 @@ Do not add any other text to your response other than the route decision.
         # has already been printed/streamed to the console by the respective process() method.
         # final_response holds the complete string.
 
-        # if VOICE_SETTINGS.get('enabled', False): # Use .get() for safety and correct key
-        #     if final_response:
-        #          # Ensure voice_output is called with the full, complete response string
-        #         await voice_output(final_response, self.client, Path(SYSTEM_SETTINGS["app_path"]) / "temp_audio")
-        #     else:
-        #         debug_print("MasterAgent: No final response to voice out.")
-        
+        # Speak the final response if OpenAI TTS is enabled
+        if VOICE_SETTINGS.get("enabled", False) and VOICE_SETTINGS.get("tts_provider") == "openai":
+            if final_response:
+                debug_print(f"MasterAgent: Sending to OpenAI TTS: '{final_response[:50]}...'")
+                # voice_output is the global instance from utils.voice
+                voice_output.speak(final_response) 
+            else:
+                debug_print("MasterAgent: No final response to voice out.")
+
         # The BaseAgent process method (and by extension, this one if it calls super().process for final answer)
         # already adds to its own conversation history.
         # MasterAgent's specific history is implicitly managed by BaseAgent here.

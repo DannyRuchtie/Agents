@@ -149,55 +149,62 @@ class VoiceOutput:
             pygame.mixer.quit()
             debug_print("Pygame mixer quit.")
 
-# Global instance
+# Global instance - this should be created when the module is imported.
+# Ensure settings are loaded *before* this instance is created if it depends on them at init time.
+# However, VoiceOutput init tries to get client and init pygame, settings are mostly used at speak time.
 voice_output = VoiceOutput()
 
 # Example usage (for testing directly if needed)
 if __name__ == '__main__':
     print("VoiceOutput Test Mode")
-    # Ensure settings are loaded if run directly (though typically handled by main app import)
-    from config.settings import load_settings
-    load_settings()
-    VOICE_SETTINGS["enabled"] = True # Enable for testing
-    SYSTEM_SETTINGS["debug_mode"] = True
-    
-    # Reinitialize with debug settings if needed, or assume it's already done
-    # test_voice = VoiceOutput() # Creates a new instance for test
-    global voice_output
-    if voice_output: # if global one exists and failed init, re-init might be needed
-        voice_output.shutdown()
-    voice_output = VoiceOutput() # re-init the global one
-    VOICE_SETTINGS["enabled"] = True # Ensure enabled after re-init
+    # Ensure settings are loaded for the test context
+    from config.settings import load_settings, VOICE_SETTINGS, SYSTEM_SETTINGS
+    load_settings() 
+    VOICE_SETTINGS["enabled"] = True # Enable voice for this test run
+    SYSTEM_SETTINGS["debug_mode"] = True # Enable debug prints for this test run
 
+    # The global voice_output instance is used. 
+    # Its initialization might have happened with different settings if this module was imported before.
+    # For a fully isolated test of VoiceOutput re-initialization, one might instantiate locally:
+    # test_vo = VoiceOutput() and then use test_vo.
+    # But for testing the global instance behavior as used by the app, we modify global settings and use it.
 
-    if not voice_output.client or not pygame.mixer.get_init():
-        print("Cannot run test: VoiceOutput not properly initialized (OpenAI client or Pygame issue).")
+    # Critical: Re-check if the global voice_output is usable after settings change, 
+    # especially if its __init__ depends on settings that might have changed.
+    # As __init__ gets client and inits pygame, it should be okay for settings to change before speak().
+    if not voice_output.client or not (hasattr(pygame.mixer, 'get_init') and pygame.mixer.get_init()):
+        debug_print("Global voice_output client or pygame mixer not ready. Attempting re-initialization for test.")
+        if hasattr(voice_output, 'shutdown') and callable(voice_output.shutdown):
+            voice_output.shutdown() # Shutdown existing global instance
+        voice_output = VoiceOutput() # Re-initialize the global instance
+        VOICE_SETTINGS["enabled"] = True # Ensure enabled again after re-init for test
+        SYSTEM_SETTINGS["debug_mode"] = True
+
+    # Final check before running test commands
+    if not voice_output.client or not (hasattr(pygame.mixer, 'get_init') and pygame.mixer.get_init()):
+        print("Cannot run test: VoiceOutput still not properly initialized after attempting re-init.")
         sys.exit(1)
 
     print("Testing voice output. Say 'hello world', then 'this is a longer test sentence'.")
     print("Try typing 'stop' in the console during speech to test interruption.")
     
     voice_output.speak("Hello world!")
-    time.sleep(1) # Give a moment before queuing next, avoid race condition on very fast speak calls
+    time.sleep(1) 
     voice_output.speak("This is a longer test sentence, check if it plays correctly and can be interrupted.")
 
-    # Keep alive for testing interruption and queued playback
     try:
-        while voice_output.audio_queue.unfinished_tasks > 0 or voice_output.speaking_flag.is_set():
-            # Check for manual stop input (simplified for test)
-            # In a real app, input handling would be more robust
-            # For this test, you might need to manually stop the python script (Ctrl+C)
-            # or rely on the natural end of speech.
+        while voice_output.audio_queue.unfinished_tasks > 0 or (hasattr(pygame.mixer, 'music') and pygame.mixer.music.get_busy()) or voice_output.speaking_flag.is_set():
             if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                line = sys.stdin.readline()
+                line = sys.stdin.readline().lower()
                 if 'stop' in line:
                     print("User typed stop, attempting to stop speech.")
                     voice_output.stop_speaking()
             time.sleep(0.2)
-        print("All queued audio processed or current speech finished.")
+        debug_print("All queued audio processed or current speech finished based on queue and flags.")
     except KeyboardInterrupt:
         print("Test interrupted by user.")
     finally:
         print("Cleaning up voice output...")
-        voice_output.shutdown()
+        if hasattr(voice_output, 'shutdown') and callable(voice_output.shutdown):
+             voice_output.shutdown()
         print("Test finished.") 

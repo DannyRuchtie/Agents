@@ -225,7 +225,8 @@ class SearchAgent(BaseAgent):
             sources_info = []
             text_processed_count = 0
 
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=False, enable_cleanup_closed=True)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 for i, result in enumerate(search_results):
                     if i >= NUM_RESULTS_TO_PROCESS:
                         break # Stop after processing the desired number of results

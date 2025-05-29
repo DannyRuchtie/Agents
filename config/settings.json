@@ -1,5 +1,5 @@
 {
-  "agents": {
+  "agent_settings": {
     "memory": {
       "enabled": true,
       "description": "Stores and retrieves conversation history and important information"
@@ -31,9 +31,21 @@
     "learning": {
       "enabled": true,
       "description": "Improves system through conversation monitoring"
+    },
+    "personality_agent": {
+      "enabled": true,
+      "description": "Learns and adapts to user's personality and preferences"
+    },
+    "weather": {
+      "enabled": true,
+      "description": "Fetches weather forecasts from a local service"
+    },
+    "time": {
+      "enabled": true,
+      "description": "Provides the current date and time"
     }
   },
-  "personality": {
+  "personality_settings": {
     "humor_level": 0.8,
     "formality_level": 0.2,
     "emoji_usage": true,
@@ -42,11 +54,50 @@
     "curious": true,
     "enthusiastic": true
   },
-  "voice": {
-    "enabled": true,
-    "voice": "af_sarah",
+  "personality_traits": {
+    "communication_style": {
+      "formality_level": 0.3,
+      "verbosity": 0.6,
+      "humor_level": 0.7,
+      "emoji_usage": true
+    },
+    "interests": [],
+    "preferences": {
+      "learning_style": "visual",
+      "communication_medium": "text",
+      "response_length": "medium",
+      "technical_level": "medium"
+    },
+    "traits": {
+      "openness": 0.8,
+      "conscientiousness": 0.7,
+      "extraversion": 0.6,
+      "agreeableness": 0.8,
+      "neuroticism": 0.3
+    },
+    "interaction_history": {
+      "preferred_topics": [],
+      "avoided_topics": [],
+      "peak_activity_times": [],
+      "typical_session_length": "medium"
+    }
+  },
+  "voice_settings": {
+    "enabled": false,
+    "tts_provider": "openai",
+    "openai_voice": "alloy",
+    "openai_model": "tts-1",
     "speed": 1.0,
-    "available_voices": {
+    "available_openai_voices": [
+      "alloy",
+      "echo",
+      "fable",
+      "onyx",
+      "nova",
+      "shimmer"
+    ],
+    "system_voice": "af_sarah",
+    "available_system_voices": {
       "af": "Adult female voice",
       "af_bella": "Adult female voice (Bella)",
       "af_nicole": "Adult female voice (Nicole)",
@@ -60,10 +111,11 @@
       "bm_lewis": "British male voice (Lewis)"
     }
   },
-  "system": {
+  "system_settings": {
     "os_type": "macos",
     "has_location_access": true,
     "has_screen_access": true,
-    "debug_mode": false
+    "debug_mode": false,
+    "app_path": "/Users/dannyruchtie/Documents/Github/Agents"
   }
 }

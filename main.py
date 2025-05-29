@@ -62,6 +62,38 @@ async def process_input(master_agent: MasterAgent, user_input: str):
         print("\nGoodbye! 👋")
         return "exit"
     
+    # Voice control commands
+    if user_input.lower() == "voice on" or user_input.lower() == "voice enable":
+        if not VOICE_SETTINGS["enabled"]:
+            VOICE_SETTINGS["enabled"] = True
+            save_settings()
+            print("\nAssistant: Voice output enabled. 🔊")
+            voice_output.speak("Voice output enabled.") # Speak confirmation
+        else:
+            print("\nAssistant: Voice output is already enabled. 🔊")
+        return # Command processed, no further MasterAgent processing needed
+
+    if user_input.lower() == "voice off" or user_input.lower() == "voice disable":
+        if VOICE_SETTINGS["enabled"]:
+            voice_output.stop_speaking() # Stop any current speech first
+            VOICE_SETTINGS["enabled"] = False
+            save_settings()
+            print("\nAssistant: Voice output disabled. 🔇")
+            # Don't use voice_output.speak for this confirmation as it's being disabled
+        else:
+            print("\nAssistant: Voice output is already disabled. 🔇")
+        return # Command processed
+
+    if user_input.lower() == "voice status":
+        status = "enabled" if VOICE_SETTINGS["enabled"] else "disabled"
+        provider = VOICE_SETTINGS.get("tts_provider", "unknown")
+        current_voice = VOICE_SETTINGS.get("openai_voice", "N/A") if provider == "openai" else VOICE_SETTINGS.get("system_voice", "N/A")
+        status_msg = f"Voice output is currently {status}. Provider: {provider}, Voice: {current_voice}."
+        print(f"\nAssistant: {status_msg}")
+        if VOICE_SETTINGS["enabled"]:
+             voice_output.speak(status_msg)
+        return # Command processed
+
     # Check for help command
     if user_input.lower() == "help":
         help_text = "\nAvailable Commands:\nAgent Management:\n- list agents - Show all available agents and their status\n- enable agent [name] - Enable a specific agent\n- disable agent [name] - Disable a specific agent\n\nVoice Output:\n- voice status - Show voice output status\n- voice on/enable - Enable voice output\n- voice off/disable - Disable voice output\n- voice stop/stop - Stop current speech\n- voice voice [name] - Change voice\n- voice speed [value] - Change voice speed (0.5-2.0)"
@@ -74,10 +106,10 @@ async def process_input(master_agent: MasterAgent, user_input: str):
     response = await master_agent.process(user_input)
     print(f"\nAssistant: {response}")
     
-    # Speak response if voice is enabled
-    if VOICE_SETTINGS["enabled"] and not user_input.lower().startswith("voice"):
-        debug_print("Speaking response with voice output")
-        voice_output.speak(response)
+    # Speak response if voice is enabled - THIS IS NOW HANDLED BY MasterAgent
+    # if VOICE_SETTINGS["enabled"] and not user_input.lower().startswith("voice"):
+    #     debug_print("Speaking response with voice output")
+    #     voice_output.speak(response)
 
 def main():
     """Run the main chat interface."""
@@ -137,8 +169,11 @@ def main():
                 print(f"\n{error_msg}")
                 prompt_shown = False  # Reset prompt flag to show prompt again
 
-    # Run the chat loop
-    asyncio.run(chat_loop())
+    try:
+        asyncio.run(chat_loop())
+    finally:
+        debug_print("Main loop ended. Shutting down voice output.")
+        voice_output.shutdown() # Ensure voice output is shutdown cleanly
 
 if __name__ == "__main__":
     main() 
