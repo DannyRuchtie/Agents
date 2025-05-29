@@ -2,6 +2,7 @@
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 import os
+import sys # Added for streaming
 
 from config.openai_config import get_client, get_agent_config
 from config.settings import debug_print
@@ -91,53 +92,91 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
                 from agents.vision_agent import VisionAgent
                 vision_agent = VisionAgent()
                 image_path, query = self._extract_image_path(input_text)
+                # Vision agent responses are not typically streamed in the same way as text,
+                # but if its analyze_image calls this process method, it would stream.
+                # For now, assume vision_agent.analyze_image handles its own output.
                 return await vision_agent.analyze_image(image_path, query)
             
             # Handle common greetings more naturally
             if not messages and input_text.lower().strip() in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]:
-                return "Hey! Great to see you! How can I help you today? 😊"
+                response_text = "Hey! Great to see you! How can I help you today? 😊"
+                print(response_text) # Print directly for simple non-LLM responses
+                return response_text
             
             # Use provided messages or build from context window
+            current_messages: List[Dict[str, str]]
             if messages:
                 # For vision messages, use them directly without modification
                 if any(isinstance(msg.get('content'), list) and 
                       any(item.get('type') == 'image_url' for item in msg['content']) 
                       for msg in messages):
-                    pass
+                    current_messages = messages
                 else:
-                    messages = [{"role": "system", "content": self.system_prompt}, *messages]
+                    current_messages = [{"role": "system", "content": self.system_prompt}, *messages]
             else:
-                messages = self.get_context_window()
-                messages.append({"role": "user", "content": input_text})
+                current_messages = self.get_context_window()
+                current_messages.append({"role": "user", "content": input_text})
             
             # Extract model configuration
             config = {
                 "model": kwargs.get("model", self.config["model"]),  # Allow model override
                 "temperature": kwargs.get("temperature", self.config.get("temperature", 0.7)),
                 "max_tokens": kwargs.get("max_tokens", self.config.get("max_tokens", 4096)),
-                "seed": kwargs.get("seed", self.config.get("seed")),
+                "seed": kwargs.get("seed", self.config.get("seed")),\
                 "response_format": kwargs.get("response_format", self.config.get("response_format", {"type": "text"}))
             }
             
-            # Make the API call
-            completion = self.client.chat.completions.create(
-                messages=messages,
+            # Make the API call with streaming
+            stream = self.client.chat.completions.create(
+                messages=current_messages,
+                stream=True, # Enable streaming
                 **config
             )
             
-            # Extract assistant's response
-            assistant_message = completion.choices[0].message.content
+            assistant_response_parts = []
+            for chunk in stream:
+                content = chunk.choices[0].delta.content
+                if content is not None:
+                    sys.stdout.write(content)
+                    sys.stdout.flush()
+                    assistant_response_parts.append(content)
             
-            # Only update conversation history if using standard input
-            if not messages:
-                self.conversation_history.append({"role": "user", "content": input_text})
-                self.conversation_history.append({"role": "assistant", "content": assistant_message})
-                self._trim_history()
+            sys.stdout.write("\\n") # Add a newline after the streamed response is complete
+            sys.stdout.flush()
+
+            assistant_message = "".join(assistant_response_parts)
             
+            # Only update conversation history if using standard input_text and not pre-defined messages
+            # This logic might need refinement: if `messages` were passed (e.g. for routing), 
+            # we might not want to add the user's `input_text` to history here.
+            # The original history update was guarded by `if not messages:`. Let's keep that for now.
+            # However, the `input_text` is the *user's* direct query in the main loop.
+            # The `messages` argument is more for internal calls like the routing decision.
+            # The key is that an agent's response should be added to *its own* history if applicable.
+            # MasterAgent has its own history. Other agents have their own.
+            # This BaseAgent's history is for when it's used directly or as a fallback.
+
+            # If this `process` call was initiated by a user query (i.e., `messages` was None initially),
+            # then input_text and assistant_message form a pair for this agent's history.
+            if messages is None or not any(m['role'] == 'user' and m['content'] == input_text for m in messages):
+                 # This condition ensures we only add to history if `input_text` was the primary query
+                 # and not part of an internal `messages` list.
+                 # A bit complex, if messages were passed, they already contain the history.
+                 # The original check was `if not messages:`. This is safer.
+                 # Let's simplify back to the original check for clarity:
+                 # if `messages` were provided, they constitute the full context for this call.
+                 # if `messages` were NOT provided, then `input_text` is the new user turn.
+                if not messages: # Reverted to original logic for history update.
+                    self.conversation_history.append({"role": "user", "content": input_text})
+                    self.conversation_history.append({"role": "assistant", "content": assistant_message})
+                    self._trim_history()
+
             return assistant_message
             
         except Exception as e:
-            return f"I encountered an error: {str(e)}"
+            error_message = f"I encountered an error: {str(e)}"
+            print(error_message) # Print error as well
+            return error_message
     
     def clear_history(self) -> None:
         """Clear the conversation history and reset start time."""

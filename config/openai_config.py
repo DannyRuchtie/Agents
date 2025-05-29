@@ -76,7 +76,7 @@ def create_image_message(text: str, image_paths: Union[str, List[str]], detail: 
     }]
 
 # Default model settings
-DEFAULT_MODEL = "gpt-4o-mini"  # Using GPT-4o mini model
+DEFAULT_MODEL = "gpt-4.1-2025-04-14"  # Using GPT-4.1 model
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "model": DEFAULT_MODEL,
@@ -107,7 +107,7 @@ AGENT_CONFIGS = {
         "seed": 654
     },
     "vision": {
-        "model": "gpt-4o-mini",  # Using GPT-4o mini for vision tasks
+        "model": "gpt-4.1-2025-04-14",  # Using GPT-4.1 for vision tasks
         "temperature": 0.2,
         "max_tokens": 300,
         "seed": 987

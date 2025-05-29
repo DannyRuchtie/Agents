@@ -26,34 +26,50 @@ class LocationAgent(BaseAgent):
         )
     
     def _get_location_from_mac(self) -> Optional[Tuple[str, float, float]]:
-        """Get location using macOS CoreLocation services."""
+        """Get location using macOS CoreLocation services via the 'whereami' command-line tool."""
         try:
-            # Use CoreLocation through a shell command
-            cmd = """
-            osascript -e '
-            tell application "System Events"
-                tell application process "SystemUIServer"
-                    try
-                        click (menu bar item 1 of menu bar 1 whose description contains "Location")
-                        delay 0.5
-                        click (menu bar item 1 of menu bar 1 whose description contains "Location")
-                        return "Location accessed"
-                    on error
-                        return "Location error"
-                    end try
-                end tell
-            end tell'
-            """
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-            if "Location accessed" in result.stdout:
-                # Now get the actual location data
-                response = requests.get('https://ipapi.co/json/')
-                if response.status_code == 200:
-                    data = response.json()
-                    return data['city'], float(data['latitude']), float(data['longitude'])
+            # Try to use the 'whereami' command-line tool if available
+            # Assumes 'whereami' is installed and outputs JSON with --format json
+            # e.g., {"latitude": 37.7749, "longitude": -122.4194, "accuracy": 65, ...}
+            cmd = ["whereami", "--format", "json"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
             
+            if result.returncode == 0 and result.stdout:
+                debug_print(f"whereami stdout: {result.stdout.strip()}")
+                data = json.loads(result.stdout.strip())
+                lat = data.get('latitude')
+                lon = data.get('longitude')
+                
+                if lat is not None and lon is not None:
+                    # 'whereami' doesn't directly give city name.
+                    # We need to reverse geocode the lat/lon to get a city name.
+                    # We can use geocoder for this, or another service if preferred.
+                    try:
+                        g = geocoder.osm([lat, lon], method='reverse')
+                        city = g.city if g.ok and g.city else f"Near {lat:.2f}, {lon:.2f}"
+                        debug_print(f"macOS CoreLocation (via whereami & reverse geocode): City: {city}, Lat: {lat}, Lon: {lon}")
+                        return city, float(lat), float(lon)
+                    except Exception as rev_geo_e:
+                        debug_print(f"Reverse geocoding for whereami result failed: {rev_geo_e}")
+                        # Fallback: return lat/lon, city will be handled by generic IP lookup if this fails higher up
+                        # Or, just return None so the main get_location tries other methods for city name.
+                        # For now, let's return None to allow IP services to provide the city name cleanly.
+                        return None 
+            else:
+                debug_print(f"'whereami' command failed or gave no output. Return code: {result.returncode}, Error: {result.stderr.strip()}")
+                debug_print("Ensure 'whereami' (from corelocationcli or similar) is installed and has location permissions.")
+                
+        except FileNotFoundError:
+            debug_print("'whereami' command not found. Please install it (e.g., npm install -g corelocationcli) for precise macOS location.")
+        except subprocess.TimeoutExpired:
+            debug_print("'whereami' command timed out.")
         except Exception as e:
-            print(f"❌ Error getting macOS location: {str(e)}")
+            # Use debug_print from config.settings for consistency if available, otherwise use standard print
+            try:
+                from config.settings import debug_print
+                debug_print(f"Error getting macOS location via whereami: {str(e)}")
+            except ImportError:
+                print(f"[DEBUG_LOCATION_AGENT] Error getting macOS location via whereami: {str(e)}")
         return None
     
     async def get_location(self) -> Tuple[str, float, float]:

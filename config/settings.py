@@ -41,6 +41,14 @@ AGENT_SETTINGS = {
     "personality_agent": {
         "enabled": True,
         "description": "Learns and adapts to user's personality and preferences"
+    },
+    "weather": {
+        "enabled": True,
+        "description": "Fetches weather forecasts from a local service"
+    },
+    "time": {
+        "enabled": True,
+        "description": "Provides the current date and time"
     }
 }
 
@@ -87,7 +95,7 @@ PERSONALITY_TRAITS = {
 
 # Voice settings
 VOICE_SETTINGS = {
-    "enabled": True,  # Voice output enabled by default
+    "enabled": False,  # Voice output DISABLED by default
     "voice": "af_sarah",  # Default voice
     "speed": 1.0,  # Default speed
     "available_voices": {
@@ -110,7 +118,8 @@ SYSTEM_SETTINGS = {
     "os_type": "macos",  # Operating system
     "has_location_access": True,  # Whether location services are enabled
     "has_screen_access": True,  # Whether screen capture is enabled
-    "debug_mode": False  # Debug mode off by default
+    "debug_mode": False,  # Debug mode off by default
+    "app_path": str(Path(__file__).resolve().parent.parent) # Added app_path, resolves to project root
 }
 
 # Settings file path
