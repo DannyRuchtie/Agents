@@ -9,7 +9,7 @@ import threading
 import queue
 from pathlib import Path
 import soundfile as sf
-from kokoro_onnx import Kokoro
+# from kokoro_onnx import Kokoro # Commented out
 
 from config.settings import VOICE_SETTINGS, is_debug_mode, debug_print
 
@@ -29,20 +29,31 @@ class VoiceOutput:
         self.speaking = False
         self.audio_queue = queue.Queue()
         self.worker_thread = None
-        
-        # Initialize kokoro TTS
-        model_path = Path("models/kokoro-v0_19.onnx")
-        voices_path = Path("models/voices.json")
-        
-        if not model_path.exists() or not voices_path.exists():
-            raise RuntimeError("Required model files not found. Please download kokoro-v0_19.onnx and voices.json")
+        self.tts = None # Initialize tts to None
+
+        try:
+            from kokoro_onnx import Kokoro # Try to import locally
+            # Initialize kokoro TTS
+            model_path = Path("models/kokoro-v0_19.onnx")
+            voices_path = Path("models/voices.json")
             
-        self.tts = Kokoro(str(model_path), str(voices_path))
-        debug_print("✓ Voice output system initialized with kokoro-onnx")
-        
-        # Start worker thread
-        self.worker_thread = threading.Thread(target=self._process_audio_queue, daemon=True)
-        self.worker_thread.start()
+            if not model_path.exists() or not voices_path.exists():
+                debug_print("Required Kokoro model files not found. Voice output disabled.")
+                # raise RuntimeError("Required model files not found. Please download kokoro-v0_19.onnx and voices.json") # Don't raise error
+            else:
+                self.tts = Kokoro(str(model_path), str(voices_path))
+                debug_print("✓ Voice output system initialized with kokoro-onnx")
+            
+            # Start worker thread only if tts is initialized
+            if self.tts:
+                self.worker_thread = threading.Thread(target=self._process_audio_queue, daemon=True)
+                self.worker_thread.start()
+            else:
+                debug_print("Kokoro TTS not initialized, voice output will be silent.")
+
+        except ImportError:
+            debug_print("kokoro_onnx not found. Voice output will be silent.")
+            self.tts = None # Ensure tts is None if import fails
         
     def stop_speaking(self):
         """Stop current playback if any."""
@@ -53,7 +64,8 @@ class VoiceOutput:
             
     def speak(self, text: str):
         """Queue text for speech synthesis."""
-        if not VOICE_SETTINGS["enabled"]:
+        if not VOICE_SETTINGS["enabled"] or not self.tts:
+            debug_print("Voice output disabled or TTS not initialized.")
             return
             
         # Add to queue and return immediately
@@ -61,6 +73,9 @@ class VoiceOutput:
         
     def _process_audio_queue(self):
         """Background worker to process audio queue."""
+        if not self.tts: # Guard against running if tts is not initialized
+            return
+
         while True:
             try:
                 # Get next text to process

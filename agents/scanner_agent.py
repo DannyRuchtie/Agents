@@ -4,6 +4,7 @@ from typing import Dict, List, Optional
 import os
 import hashlib
 import shutil
+import httpx
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from langchain_openai import OpenAIEmbeddings
@@ -32,7 +33,10 @@ class ScannerAgent(BaseAgent):
         # Initialize embeddings and vector store
         try:
             print("Initializing OpenAI embeddings...")
-            self.embeddings = OpenAIEmbeddings()
+            # Create httpx clients with trust_env=False
+            sync_httpx_client = httpx.Client(trust_env=False)
+            async_httpx_client = httpx.AsyncClient(trust_env=False)
+            self.embeddings = OpenAIEmbeddings(client=sync_httpx_client, async_client=async_httpx_client)
             print("Embeddings initialized successfully")
             
             print("Initializing Chroma database...")

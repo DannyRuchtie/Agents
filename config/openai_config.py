@@ -2,6 +2,7 @@
 import os
 import base64
 from typing import Dict, Any, List, Union
+import httpx
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -15,7 +16,9 @@ def get_client() -> OpenAI:
     """Get or create the OpenAI client singleton."""
     global _client
     if _client is None:
-        _client = OpenAI()  # Will use OPENAI_API_KEY from environment
+        # Explicitly disable environment proxies for httpx client
+        custom_httpx_client = httpx.Client(trust_env=False)
+        _client = OpenAI(http_client=custom_httpx_client)
     return _client
 
 def encode_image(image_path: str) -> str:

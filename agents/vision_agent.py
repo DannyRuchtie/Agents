@@ -8,7 +8,7 @@ import pytesseract
 from PIL import Image
 import numpy as np
 import base64
-import imghdr
+import filetype
 from .base_agent import BaseAgent
 from config.openai_config import create_image_message
 from config.paths_config import get_path
@@ -63,9 +63,11 @@ class VisionAgent(BaseAgent):
             raise ValueError(f"Image file is empty: {image_path}")
         
         # Check image format
-        img_format = imghdr.what(image_path)
-        if not img_format:
+        kind = filetype.guess(image_path)
+        if kind is None:
             raise ValueError(f"Unable to determine image format for: {image_path}")
+        
+        img_format = kind.extension
             
         if img_format == 'jpeg':
             img_format = 'jpg'
