@@ -34,6 +34,7 @@ from agents.time_agent import TimeAgent
 from agents.calculator_agent import CalculatorAgent
 from agents.email_agent import EmailAgent
 from agents.screen_agent import ScreenAgent
+from agents.camera_agent import CameraAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
@@ -92,6 +93,7 @@ class MasterAgent(BaseAgent):
             ("code", "agents.code_agent", "CodeAgent", "Helps with programming tasks, writing code, debugging, and explaining code snippets."),
             ("scanner", "agents.scanner_agent", "ScannerAgent", "Scans and analyzes files and documents for information or insights."),
             ("vision", "agents.vision_agent", "VisionAgent", "Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown."),
+            ("camera", "agents.camera_agent", "CameraAgent", "Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'."),
             ("learning", "agents.learning_agent", "LearningAgent", "Learns from interactions to improve responses and system performance over time."),
             ("weather", "agents.weather_agent", "WeatherAgent", "Fetches current weather conditions and forecasts for specified locations."),
             ("time", "agents.time_agent", "TimeAgent", "Provides the current date and time."),
@@ -115,6 +117,13 @@ class MasterAgent(BaseAgent):
                             debug_print(f"ScreenAgent initialized WITH VisionAgent instance.")
                         else:
                             debug_print(f"ScreenAgent ({name}) enabled but VisionAgent instance not available. ScreenAgent will NOT be active.")
+                            continue # Skip adding this agent if dependency not met
+                    elif name == "camera":
+                        if self.vision_agent_instance:
+                            instance = agent_class(vision_agent=self.vision_agent_instance)
+                            debug_print(f"CameraAgent initialized WITH VisionAgent instance.")
+                        else:
+                            debug_print(f"CameraAgent ({name}) enabled but VisionAgent instance not available. CameraAgent will NOT be active.")
                             continue # Skip adding this agent if dependency not met
                     elif name == "weather":
                         # WeatherAgent expects memory_data_ref, which is MasterAgent's self.memory_data
@@ -283,6 +292,7 @@ Which agent or action is best suited to handle this query?
 - If the query relates to managing emails, respond with 'ROUTE: email'.
 - If the query asks to describe the CURRENT LIVE screen (e.g., 'what am I looking at NOW?', 'describe my CURRENT screen') AND does NOT contain an image file path and is not a follow-up to a recently shown image, respond with 'ROUTE: screen'.
 - If the query involves analyzing an image file that has been EXPLICITLY MENTIONED BY PATH or if the query starts with 'Analyze this image:', respond with 'ROUTE: vision'.
+- If the query asks to use the camera, capture an image from the webcam, or describe what the camera sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera'), respond with 'ROUTE: camera'.
 - Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the other specialized agents listed above based on their description (e.g., 'ROUTE: search', 'ROUTE: weather').
 Do not add any other text to your response other than the route decision.
 """
@@ -344,6 +354,8 @@ Do not add any other text to your response other than the route decision.
                 final_response = f"I tried to use the Screen Agent for your query ('{query}'), but it seems to be unavailable. This could be due to a missing dependency (like VisionAgent), a configuration issue, or macOS permissions for screen capture."
             elif llm_intended_route == "vision":
                  final_response = f"I tried to use the Vision Agent for your query ('{query}'), but it seems to be unavailable. Please check its configuration."
+            elif llm_intended_route == "camera":
+                 final_response = f"I tried to use the Camera Agent for your query ('{query}'), but it seems to be unavailable. This could be because the VisionAgent (a dependency) isn't working, the camera is not accessible, or there's a configuration issue. Please check camera permissions and VisionAgent status."
             # Add more specific fallbacks for other agents if needed
             else:
                 final_response = f"I intended to use an agent called '{llm_intended_route}' for your query ('{query}'), but it's not currently available or recognized. Please check my configuration."

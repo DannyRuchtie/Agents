@@ -108,6 +108,7 @@ class VisionAgent(BaseAgent):
     async def analyze_image(self, image_path: str, query: str = "") -> str:
         """Analyze a shared image."""
         try:
+            debug_print(f"VisionAgent: analyze_image called with path: '{image_path}' and query: '{query}'")
             try:
                 # Verify image can be read and encoded
                 encoded_image = self._encode_image(image_path)

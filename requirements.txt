@@ -30,4 +30,17 @@ ratelim>=0.1.6
 #kokoro-onnx>=0.2.6
 soundfile>=0.12.1
 filetype>=1.0.0
-beautifulsoup4>=4.9.3 
+beautifulsoup4>=4.9.3
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+Flask
+readability-lxml
+html2text
+selenium
+webdriver-manager
+tiktoken
+# PyMuPDF
+fitz
+# Pillow (PIL)
+Pillow 

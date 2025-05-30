@@ -53,6 +53,10 @@ AGENT_SETTINGS = {
     "screen": {
         "enabled": True,
         "description": "Captures the screen and uses VisionAgent to describe it"
+    },
+    "camera": {
+        "enabled": True,
+        "description": "Captures images from webcam and uses VisionAgent to describe them"
     }
 }
 

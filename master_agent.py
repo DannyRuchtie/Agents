@@ -2,32 +2,48 @@ import json
 import datetime
 import os
 import re
+from typing import Optional # Added for type hinting
+
+print("!!!!!! MASTER_AGENT.PY MODULE LOADED - VERSION: TOP_LEVEL_DEBUG_V4 !!!!!!")
+
+from agents.base_agent import BaseAgent # Assuming BaseAgent is in agents.base_agent
+from agents.search_agent import SearchAgent
+from agents.email_agent import EmailAgent
+from agents.calculator_agent import CalculatorAgent
+from agents.weather_agent import WeatherAgent
+from agents.vision_agent import VisionAgent # Added
+from agents.camera_agent import CameraAgent # Added
+
+from config.settings import debug_print # Assuming debug_print is in config.settings
 
 MEMORY_FILE_PATH = "agent_memory.json"
 
 MASTER_SYSTEM_PROMPT = """You are a master AI agent coordinating a team of specialized AI agents.
-Your primary role is to understand the user's request and route it to the most appropriate specialized agent.
+Your primary role is to understand the user's request, current conversation history, and route it to the most appropriate specialized agent.
 Available agents and their functions:
 - search: For web searches, finding information, or answering general knowledge questions.
 - email: For managing Gmail, including checking new emails, sending emails, and searching for specific emails.
 - calculator: For performing mathematical calculations.
+- camera: For capturing images from the webcam and describing what it sees. 
+- weather: For fetching current weather information for a specified location.
 - writer: For creative writing tasks, drafting documents, summarizing text.
 - code: For generating code, explaining code, or helping with programming tasks.
 - memory: For remembering specific pieces of information from the conversation when explicitly asked, or for retrieving previously remembered information, including structured facts.
-- weather: For fetching current weather information for a specified location.
 
 Routing and Information Extraction:
-Based on the user's query and the conversation history, determine the best agent.
+Based on the user's query and the conversation history, determine the best agent. Your response for this routing task MUST be a single, valid JSON object and nothing else. Do not include any other text, greetings, or explanations outside of the JSON structure itself.
 Respond with a JSON object containing:
 {
   "route_to_agent": "agent_name",
-  "action_type": "specific_action",
+  "action_type": "specific_action", // Optional, context-dependent
   "parameters": { // agent-specific parameters. For commit_structured_fact, expect entity, attribute, value.
     "query_for_agent": "full user query or modified query for the agent",
     // ... other parameters
   },
   "explanation": "Brief explanation of why this agent and action were chosen."
 }
+
+CRITICAL OVERRIDE: For any queries related to seeing the user, using the camera, or looking at something via webcam (e.g., "can you see me?", "look at me", "what do I look like?", "use the camera", "show me what you see", "can u see me"), you MUST ALWAYS set "route_to_agent": "camera" in the JSON response. This is a strict directive and takes precedence over other routing considerations for these specific queries. Do not attempt to answer these types of questions yourself; always delegate to the 'camera' agent.
 
 Specific Instructions for "memory" route:
 - If the user says *exactly* "remember this", "save this", "commit this to memory", or very similar short phrases implying they want to save the *immediately preceding assistant response* without new information, set "action_type": "commit_previous_turn_to_memory". The context is ONLY the last assistant message. Do NOT ask what to remember.
@@ -56,6 +72,8 @@ class MasterAgent(BaseAgent):
         self.search_agent = SearchAgent()
         self.email_agent = EmailAgent()
         self.calculator_agent = CalculatorAgent()
+        self.vision_agent = VisionAgent() # Initialized VisionAgent
+        self.camera_agent = CameraAgent(vision_agent=self.vision_agent) # Initialized CameraAgent
         self._load_memory_file() # Load memory at startup BEFORE initializing agents that need it
         self.weather_agent = WeatherAgent(memory_data_ref=self.memory_data) 
         # self.memory_agent = MemoryAgent() # If we create a dedicated class
@@ -116,6 +134,7 @@ class MasterAgent(BaseAgent):
             debug_print(f"MasterAgent: Error persisting memory to {MEMORY_FILE_PATH}: {e}")
 
     async def process(self, user_input: str, local_file_content: Optional[str] = None) -> str:
+        debug_print("MasterAgent.process -- TOP OF METHOD -- VERSION CHECKPOINT: HARDCODED_OVERRIDE_V2")
         self.conversation_history.append({"role": "user", "content": user_input})
 
         # Prepare context for the routing LLM call
@@ -131,10 +150,38 @@ class MasterAgent(BaseAgent):
             action_details_json_str = await super().process(f"{routing_prompt_addition}\n\nUser Query: {user_input}")
             debug_print(f"MasterAgent: LLM routing/action decision: {action_details_json_str}")
             
+            action_details = None
+            # Attempt to parse the entire string as JSON first
             try:
                 action_details = json.loads(action_details_json_str)
             except json.JSONDecodeError:
-                debug_print("MasterAgent: Failed to parse JSON from LLM routing. Falling back to general response.")
+                # If direct parsing fails, try to extract JSON from a larger string
+                # This regex looks for a valid JSON object that might be embedded in other text.
+                match = re.search(r'\{.*?\}', action_details_json_str, re.DOTALL)
+                if match:
+                    try:
+                        action_details = json.loads(match.group(0))
+                        debug_print(f"MasterAgent: Extracted JSON: {action_details}")
+                    except json.JSONDecodeError as e_inner:
+                        debug_print(f"MasterAgent: Failed to parse extracted JSON: {e_inner}")
+                        action_details = None # Ensure it's None if extraction parsing fails
+                else:
+                    debug_print("MasterAgent: No JSON object found in LLM output.")
+
+            # Fallback if JSON parsing failed but we might have a simple route string
+            if action_details is None:
+                # Check for simple route commands like "ROUTE: agent_name" or just "agent_name"
+                simple_route_match = re.match(r'^(?:ROUTE:\s*)?(\w+)', action_details_json_str.strip(), re.IGNORECASE)
+                if simple_route_match:
+                    agent_name_from_simple_route = simple_route_match.group(1).lower()
+                    # Check if this matches any known agent names (can be expanded)
+                    known_agents = ["search", "email", "calculator", "camera", "weather", "memory", "master_agent_direct"]
+                    if agent_name_from_simple_route in known_agents:
+                        action_details = {"route_to_agent": agent_name_from_simple_route, "parameters": {"query_for_agent": user_input}}
+                        debug_print(f"MasterAgent: Interpreted simple route from LLM output: {action_details}")
+            
+            if action_details is None: # If still no valid action_details
+                debug_print("MasterAgent: Failed to parse or interpret LLM routing. Falling back to general response.")
                 response_content = await super().process(user_input)
                 self.conversation_history.append({"role": "assistant", "content": response_content})
                 return response_content
@@ -143,6 +190,31 @@ class MasterAgent(BaseAgent):
             action_type = action_details.get("action_type")
             parameters = action_details.get("parameters", {})
             query_for_agent = parameters.get("query_for_agent", user_input)
+
+            # --- Hardcoded override for camera queries if LLM missed it ---
+            normalized_user_input = user_input.strip().lower()
+            camera_trigger_phrases = [
+                "can you see me", "can u see me", "see me",
+                "look at me", "what do i look like", 
+                "use the camera", "activate camera", "show me what you see",
+                "whats on camera", "whats in front of me" # Added more variations
+            ]
+            # Remove question marks for matching
+            normalized_user_input_no_punctuation = normalized_user_input.replace('?', '').replace('!', '').replace('.', '')
+
+            debug_print(f"MasterAgent: Checking hardcoded camera override. Input for check: '{normalized_user_input_no_punctuation}'")
+            for phrase in camera_trigger_phrases:
+                debug_print(f"MasterAgent: Override Check: phrase='{phrase}', input='{normalized_user_input_no_punctuation}'")
+                if phrase in normalized_user_input_no_punctuation:
+                    if agent_choice != "camera":
+                        debug_print(f"MasterAgent: Hardcoded override to 'camera' agent due to phrase: '{phrase}' in user input: '{user_input}'. Original LLM route was '{agent_choice}'.")
+                        agent_choice = "camera"
+                        # Ensure query_for_agent is set for the camera agent
+                        if "query_for_agent" not in parameters or parameters["query_for_agent"] == user_input: # if it was default
+                             parameters["query_for_agent"] = "User asked to use the camera or a related query: " + user_input
+                        query_for_agent = parameters["query_for_agent"] 
+                    break 
+            # --- End hardcoded override ---
 
             response_content = f"Could not route request: {agent_choice} with action {action_type}"
 
@@ -188,6 +260,8 @@ class MasterAgent(BaseAgent):
                 response_content = await self.email_agent.process(query_for_agent)
             elif agent_choice == "calculator":
                 response_content = await self.calculator_agent.process(query_for_agent)
+            elif agent_choice == "camera": # Added camera route
+                response_content = await self.camera_agent.process(query_for_agent)
             elif agent_choice == "weather":
                 response_content = await self.weather_agent.process(query_for_agent)
             elif agent_choice == "memory":
