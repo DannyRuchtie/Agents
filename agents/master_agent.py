@@ -31,6 +31,7 @@ from agents.location_agent import LocationAgent
 from agents.learning_agent import LearningAgent
 from agents.weather_agent import WeatherAgent
 from agents.time_agent import TimeAgent
+from agents.calculator_agent import CalculatorAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
@@ -70,58 +71,38 @@ class MasterAgent(BaseAgent):
             "memory": "Manages and recalls personal information, preferences, and past conversation details.",
             "get_last_sources": "Retrieves and presents the sources for information recently provided by the search agent."
         }
-        
-        if is_agent_enabled("personality"):
-            debug_print("Initializing Personality Agent...")
-            from .personality_agent import PersonalityAgent
-            self.agents["personality"] = PersonalityAgent()
-            self.agent_descriptions["personality"] = "Analyzes interactions to understand and adapt to the user's personality and communication style."
-            
-        if is_agent_enabled("search"):
-            debug_print("Initializing Search Agent...")
-            self.agents["search"] = SearchAgent()
-            self.agent_descriptions["search"] = "Performs web searches to find information on various topics."
-            
-        if is_agent_enabled("writer"):
-            debug_print("Initializing Writer Agent...")
-            self.agents["writer"] = WriterAgent()
-            self.agent_descriptions["writer"] = "Assists with writing tasks like composing emails, summaries, or creative text."
-            
-        if is_agent_enabled("code"):
-            debug_print("Initializing Code Agent...")
-            self.agents["code"] = CodeAgent()
-            self.agent_descriptions["code"] = "Helps with programming tasks, writing code, debugging, and explaining code snippets."
-            
-        if is_agent_enabled("scanner"):
-            debug_print("Initializing Scanner Agent...")
-            self.agents["scanner"] = ScannerAgent()
-            self.agent_descriptions["scanner"] = "Scans and analyzes files and documents for information or insights."
-            
-        if is_agent_enabled("vision"):
-            debug_print("Initializing Vision Agent...")
-            self.agents["vision"] = VisionAgent()
-            self.agent_descriptions["vision"] = "Analyzes and understands images to provide descriptions or answer questions about them."
-            
-        if is_agent_enabled("location"):
-            debug_print("Initializing Location Agent...")
-            self.agents["location"] = LocationAgent()
-            self.agent_descriptions["location"] = "Provides location-based information and services."
-            
-        if is_agent_enabled("learning"):
-            debug_print("Initializing Learning Agent...")
-            self.agents["learning"] = LearningAgent()
-            self.agent_descriptions["learning"] = "Learns from interactions to improve responses and system performance over time."
-            
-        if is_agent_enabled("weather"):
-            debug_print("Initializing Weather Agent...")
-            self.agents["weather"] = WeatherAgent()
-            self.agent_descriptions["weather"] = "Fetches current weather conditions and forecasts for specified locations."
-            
-        if is_agent_enabled("time"):
-            debug_print("Initializing Time Agent...")
-            self.agents["time"] = TimeAgent()
-            self.agent_descriptions["time"] = "Provides the current date and time."
-            
+        self.last_agent_used_for_query: Optional[str] = None
+
+        # Dynamically initialize enabled agents
+        agent_initializers = {
+            "personality": ("agents.personality_agent", "PersonalityAgent", "Analyzes interactions to understand and adapt to the user's personality and communication style."),
+            "search": ("agents.search_agent", "SearchAgent", "Performs web searches to find information on various topics."),
+            "writer": ("agents.writer_agent", "WriterAgent", "Assists with writing tasks like composing emails, summaries, or creative text."),
+            "code": ("agents.code_agent", "CodeAgent", "Helps with programming tasks, writing code, debugging, and explaining code snippets."),
+            "scanner": ("agents.scanner_agent", "ScannerAgent", "Scans and analyzes files and documents for information or insights."),
+            "vision": ("agents.vision_agent", "VisionAgent", "Analyzes and understands images to provide descriptions or answer questions about them."),
+            "location": ("agents.location_agent", "LocationAgent", "Provides location-based information and services."),
+            "learning": ("agents.learning_agent", "LearningAgent", "Learns from interactions to improve responses and system performance over time."),
+            "weather": ("agents.weather_agent", "WeatherAgent", "Fetches current weather conditions and forecasts for specified locations."),
+            "time": ("agents.time_agent", "TimeAgent", "Provides the current date and time."),
+            "calculator": ("agents.calculator_agent", "CalculatorAgent", "Handles mathematical calculations and evaluates expressions.")
+        }
+
+        for name, (module_path, class_name, description) in agent_initializers.items():
+            if is_agent_enabled(name) or name == "calculator":
+                debug_print(f"Initializing {class_name}...")
+                try:
+                    module = __import__(module_path, fromlist=[class_name])
+                    agent_class = getattr(module, class_name)
+                    self.agents[name] = agent_class()
+                    self.agent_descriptions[name] = description
+                except ImportError as e:
+                    debug_print(f"Failed to import {class_name} from {module_path}: {e}")
+                except AttributeError as e:
+                    debug_print(f"Failed to find {class_name} in {module_path}: {e}")
+                except Exception as e:
+                    debug_print(f"General error initializing {class_name}: {e}")
+
         debug_print(f"Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
         debug_print(f"Agent descriptions: {self.agent_descriptions}")
     
@@ -232,6 +213,7 @@ Which agent or action is best suited to handle this query?
 - If the query is general conversation, or if you can answer it directly with your existing knowledge and personality as the master assistant, respond with 'ROUTE: master'.
 - If the query is a direct follow-up to the 'Assistant replied' context above and can be answered from that, respond with 'ROUTE: master'.
 - If the query seems to be asking for the sources, origin, or evidence for information that was likely provided by a search in the 'Assistant replied' context above, respond with 'ROUTE: get_last_sources'.
+- If the query is primarily a mathematical calculation or requires evaluation of a mathematical expression (e.g., 'what is 2 plus 3', 'calculate 5 factorial', 'solve 10 * (3+2)'), respond with 'ROUTE: calculator'.
 - Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the specialized agents listed above (e.g., 'ROUTE: search', 'ROUTE: weather').
 Do not add any other text to your response other than the route decision.
 """
@@ -288,6 +270,13 @@ Do not add any other text to your response other than the route decision.
             else:
                 debug_print(f"SearchAgent not available or doesn't support get_last_retrieved_sources.")
                 final_response = "I can't retrieve the sources right now. The search functionality might not be available or I couldn't find previous search details."
+        elif chosen_agent_name == "calculator":
+            if "calculator" in self.agents:
+                debug_print(f"MasterAgent routing to calculator for query: {query}")
+                final_response = await self.agents["calculator"].process(query)
+            else:
+                debug_print(f"CalculatorAgent not available. Defaulting to master.")
+                final_response = await super().process(f"I don't have a calculator agent available right now, but I'll try to help with your query: {query}")
         elif chosen_agent_name in self.agents:
             debug_print(f"MasterAgent routing to {chosen_agent_name} for query: {query}")
             # The specialist agent's process method is now expected to print its own output (if any)
