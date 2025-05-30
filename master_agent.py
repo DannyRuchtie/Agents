@@ -1,6 +1,7 @@
 import json
 import datetime
 import os
+import re
 
 MEMORY_FILE_PATH = "agent_memory.json"
 
@@ -12,25 +13,30 @@ Available agents and their functions:
 - calculator: For performing mathematical calculations.
 - writer: For creative writing tasks, drafting documents, summarizing text.
 - code: For generating code, explaining code, or helping with programming tasks.
-- memory: For remembering specific pieces of information from the conversation when explicitly asked, or for retrieving previously remembered information.
+- memory: For remembering specific pieces of information from the conversation when explicitly asked, or for retrieving previously remembered information, including structured facts.
+- weather: For fetching current weather information for a specified location.
 
 Routing and Information Extraction:
 Based on the user's query and the conversation history, determine the best agent.
 Respond with a JSON object containing:
 {
-  "route_to_agent": "agent_name", // e.g., "search", "email", "memory"
-  "action_type": "specific_action", // e.g., "web_search", "check_new_emails", "commit_previous_turn_to_memory", "general_query"
-  "parameters": { // agent-specific parameters
+  "route_to_agent": "agent_name",
+  "action_type": "specific_action",
+  "parameters": { // agent-specific parameters. For commit_structured_fact, expect entity, attribute, value.
     "query_for_agent": "full user query or modified query for the agent",
-    // ... other parameters like search_terms, recipient, etc.
+    // ... other parameters
   },
   "explanation": "Brief explanation of why this agent and action were chosen."
 }
 
 Specific Instructions for "memory" route:
-- If the user says "remember this", "save this", "keep this in mind", or similar phrases implying they want to save the *immediately preceding assistant response*, set "action_type": "commit_previous_turn_to_memory". Do NOT ask what to remember; the context is the last assistant message.
-- If the user asks "what did I ask you to remember?", "what's in your memory?", or wants to retrieve/query stored information, set "action_type": "query_memory".
-- For other general interactions related to memory capabilities, set "action_type": "general_memory_interaction".
+- If the user says *exactly* "remember this", "save this", "commit this to memory", or very similar short phrases implying they want to save the *immediately preceding assistant response* without new information, set "action_type": "commit_previous_turn_to_memory". The context is ONLY the last assistant message. Do NOT ask what to remember.
+- If the user states a fact to remember, like "remember Kiki's email is xyz@abc.com", "store that my favorite color is blue", or "my location is London", set "action_type": "commit_structured_fact". Extract the following parameters: 
+    - "entity": (e.g., "Kiki", "my favorite color", "user"). For "my location is X", the entity should be "user".
+    - "attribute": (e.g., "email", "value", "default_location"). For "my location is X", the attribute should be "default_location".
+    - "value": (e.g., "xyz@abc.com", "blue", "London").
+- If the user asks to retrieve/query stored information (e.g.,"what was Kiki's email?", "what's my favorite color?", "what is my default location?"), set "action_type": "query_memory". The LLM should try to identify the entity and attribute the user is asking about in the parameters, e.g., {"entity": "Kiki", "attribute": "email"} or {"entity": "user", "attribute": "default_location"}.
+- For other general interactions related to memory capabilities not covered above, set "action_type": "general_memory_interaction".
 
 If routing to 'email' for sending, try to extract 'to', 'subject', 'body'.
 If routing to 'email' for searching, try to extract 'search_terms'.
@@ -50,9 +56,9 @@ class MasterAgent(BaseAgent):
         self.search_agent = SearchAgent()
         self.email_agent = EmailAgent()
         self.calculator_agent = CalculatorAgent()
+        self._load_memory_file() # Load memory at startup BEFORE initializing agents that need it
+        self.weather_agent = WeatherAgent(memory_data_ref=self.memory_data) 
         # self.memory_agent = MemoryAgent() # If we create a dedicated class
-
-        self._load_memory_file() # Load memory at startup
 
     def _load_memory_file(self):
         try:
@@ -67,16 +73,29 @@ class MasterAgent(BaseAgent):
             debug_print(f"MasterAgent: Error loading memory file {MEMORY_FILE_PATH}: {e}")
             self.memory_data = {} # Initialize on error
 
-    def _persist_memory_item(self, category: str, item_content: any):
+    def _persist_memory_item(self, category: str, item_content: any, is_fact_store_item: bool = False):
         if not isinstance(self.memory_data, dict): # Ensure memory_data is a dict
             self.memory_data = {}
         
         if category not in self.memory_data:
             self.memory_data[category] = []
         
-        # For conversation history, we might replace it entirely or append smartly
         if category == "conversation_history":
              self.memory_data[category] = item_content # Replace if it's the whole history
+        elif is_fact_store_item: # item_content is already the dict with entity, attribute, value
+            if isinstance(self.memory_data[category], list):
+                # Optional: Check for duplicates/updates for the same entity-attribute pair
+                # For simplicity now, just append.
+                self.memory_data[category].append({
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    **item_content # spread the dict here
+                })
+            else: # If the category exists but isn't a list, reinitialize it as a list
+                debug_print(f"MasterAgent: Warning - category '{category}' in memory was not a list. Reinitializing.")
+                self.memory_data[category] = [{
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    **item_content
+                }]
         elif isinstance(self.memory_data[category], list):
             self.memory_data[category].append({
                 "timestamp": datetime.datetime.now().isoformat(),
@@ -127,12 +146,50 @@ class MasterAgent(BaseAgent):
 
             response_content = f"Could not route request: {agent_choice} with action {action_type}"
 
+            # --- Context Injection from Fact Store (Phase 2) ---
+            if agent_choice in ["email", "search"]: # Apply to agents where entity context is useful
+                if "fact_store" in self.memory_data:
+                    augmented_query = query_for_agent
+                    facts_used_for_augmentation = [] 
+                    for fact in self.memory_data["fact_store"]:
+                        entity_name = fact.get("entity")
+                        entity_value = fact.get("value")
+                        # Ensure we have an entity name and it hasn't been used for this query augmentation yet
+                        # and we are not trying to augment based on a generic "user" entity in this particular loop.
+                        if entity_name and entity_name not in facts_used_for_augmentation and entity_name.lower() != "user": 
+                            import re # Moved import inside to ensure it's only used when needed and avoid potential module-level clutter if not universally used.
+                            try:
+                                # Attempt to find the entity as a whole word, case insensitive
+                                if re.search(r"\b" + re.escape(entity_name) + r"\b", augmented_query, re.IGNORECASE):
+                                    # Simple augmentation: replace entity with "entity (value)"
+                                    replacement_text = f"{entity_name} ({entity_value})"
+                                    # Perform case-insensitive replacement of the first occurrence
+                                    augmented_query = re.sub(r"\b" + re.escape(entity_name) + r"\b", replacement_text, augmented_query, 1, re.IGNORECASE)
+                                    facts_used_for_augmentation.append(entity_name)
+                                    debug_print(f"MasterAgent: Augmented query with fact: '{entity_name}' -> '{replacement_text}'. New query: '{augmented_query}'")
+                            except re.error as e:
+                                debug_print(f"MasterAgent: Regex error during fact augmentation for entity '{entity_name}': {e}")
+                    
+                    if augmented_query != query_for_agent:
+                        query_for_agent = augmented_query 
+            
+            # Removed the specific default location injection block for WeatherAgent from here,
+            # as WeatherAgent now handles its own default location lookup using the passed memory_data_ref.
+
+            # --- Specific override for "remember this" --- 
+            if agent_choice == "memory" and user_input.strip().lower() == "remember this":
+                action_type = "commit_previous_turn_to_memory"
+                debug_print("MasterAgent: Overriding to commit_previous_turn_to_memory due to exact 'remember this' match.")
+            # --- End override --- 
+
             if agent_choice == "search":
                 response_content = await self.search_agent.process(query_for_agent)
             elif agent_choice == "email":
                 response_content = await self.email_agent.process(query_for_agent)
             elif agent_choice == "calculator":
                 response_content = await self.calculator_agent.process(query_for_agent)
+            elif agent_choice == "weather":
+                response_content = await self.weather_agent.process(query_for_agent)
             elif agent_choice == "memory":
                 if action_type == "commit_previous_turn_to_memory":
                     if len(self.conversation_history) >= 2:
@@ -149,15 +206,51 @@ class MasterAgent(BaseAgent):
                             response_content = "There wasn't a clear previous message for me to remember. What would you like me to save?"
                     else:
                         response_content = "There's no prior conversation for me to remember yet. What would you like me to save?"
+                
+                elif action_type == "commit_structured_fact":
+                    entity = parameters.get("entity")
+                    attribute = parameters.get("attribute")
+                    value = parameters.get("value")
+                    if entity and attribute and value:
+                        fact_data = {"entity": entity, "attribute": attribute, "value": value}
+                        self._persist_memory_item(category="fact_store", item_content=fact_data, is_fact_store_item=True)
+                        response_content = f"Okay, I've recorded that {entity}'s {attribute} is {value}."
+                    else:
+                        missing_params = []
+                        if not entity: missing_params.append("entity (e.g., person, item)")
+                        if not attribute: missing_params.append("attribute (e.g., email, color)")
+                        if not value: missing_params.append("value (the actual data)")
+                        response_content = f"I tried to save that fact, but I'm missing some details: { ', '.join(missing_params) }."
+
                 elif action_type == "query_memory":
                     # Basic retrieval from 'user_initiated_saves' for now
-                    if "user_initiated_saves" in self.memory_data and self.memory_data["user_initiated_saves"]:
+                    # TODO: Enhance to query 'fact_store' based on entity/attribute from parameters
+                    query_entity = parameters.get("entity")
+                    query_attribute = parameters.get("attribute")
+                    
+                    found_facts = []
+                    if query_entity and "fact_store" in self.memory_data:
+                        for fact in reversed(self.memory_data["fact_store"]):
+                            if fact.get("entity", "").lower() == query_entity.lower():
+                                if query_attribute and fact.get("attribute", "").lower() == query_attribute.lower():
+                                    found_facts.append(f"{fact['entity']}'s {fact['attribute']} is {fact['value']} (Saved on {fact['timestamp']}).")
+                                    break # Found specific attribute, stop
+                                elif not query_attribute: # if no specific attribute, list all for entity
+                                    found_facts.append(f"{fact['entity']}'s {fact['attribute']} is {fact['value']} (Saved on {fact['timestamp']}).")
+                        if found_facts:
+                            response_content = "Here's what I found in my recorded facts:\n" + "\n".join(found_facts)
+                        else:
+                            response_content = f"I don't have any recorded facts for '{query_entity}'" 
+                            if query_attribute: response_content += f" with attribute '{query_attribute}'."
+                            else: response_content += "."
+
+                    elif "user_initiated_saves" in self.memory_data and self.memory_data["user_initiated_saves"]:
                         response_items = []
                         for item in self.memory_data["user_initiated_saves"][-3:]: # Show last 3 saved items
                             response_items.append(f"- (Saved on {item['timestamp']}): {item['content'][:150].replace('\n', ' ')}...")
-                        response_content = "Here are some of the recent things I've remembered for you:\n" + "\n".join(response_items)
+                        response_content = "I don't have specific facts for that query, but here are some of the recent general things I've remembered for you:\n" + "\n".join(response_items)
                     else:
-                        response_content = "I haven't specifically remembered anything for you yet. Ask me to 'remember this' after I provide useful info!"
+                        response_content = "I haven't specifically remembered anything for you yet. Ask me to 'remember this' after I provide useful info, or 'remember Kiki\'s email is ...' to store a fact!"
                 else:
                     response_content = "I can help you remember things or recall saved information. How can I assist?"
 
@@ -198,6 +291,7 @@ class MasterAgent(BaseAgent):
 from agents.search_agent import SearchAgent
 from agents.email_agent import EmailAgent
 from agents.calculator_agent import CalculatorAgent
+from agents.weather_agent import WeatherAgent
 from config.settings import debug_print
 from typing import Optional
 # Ensure BaseAgent is imported if not already implicitly done through a parent class in full context

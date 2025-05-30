@@ -27,7 +27,6 @@ from agents.writer_agent import WriterAgent
 from agents.code_agent import CodeAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
-from agents.location_agent import LocationAgent
 from agents.learning_agent import LearningAgent
 from agents.weather_agent import WeatherAgent
 from agents.time_agent import TimeAgent
@@ -82,7 +81,6 @@ class MasterAgent(BaseAgent):
             "code": ("agents.code_agent", "CodeAgent", "Helps with programming tasks, writing code, debugging, and explaining code snippets."),
             "scanner": ("agents.scanner_agent", "ScannerAgent", "Scans and analyzes files and documents for information or insights."),
             "vision": ("agents.vision_agent", "VisionAgent", "Analyzes and understands images to provide descriptions or answer questions about them."),
-            "location": ("agents.location_agent", "LocationAgent", "Provides location-based information and services."),
             "learning": ("agents.learning_agent", "LearningAgent", "Learns from interactions to improve responses and system performance over time."),
             "weather": ("agents.weather_agent", "WeatherAgent", "Fetches current weather conditions and forecasts for specified locations."),
             "time": ("agents.time_agent", "TimeAgent", "Provides the current date and time."),

@@ -15,7 +15,6 @@ from agents.writer_agent import WriterAgent
 from agents.code_agent import CodeAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
-from agents.location_agent import LocationAgent
 from agents.learning_agent import LearningAgent
 from utils.voice import voice_output
 

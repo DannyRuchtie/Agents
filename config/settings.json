@@ -83,7 +83,7 @@
     }
   },
   "voice_settings": {
-    "enabled": false,
+    "enabled": true,
     "tts_provider": "openai",
     "openai_voice": "alloy",
     "openai_model": "tts-1",

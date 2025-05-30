@@ -1,229 +1,163 @@
 """Weather agent for fetching forecasts from a local URL."""
 import asyncio
 import aiohttp
-from typing import Dict, Any
+import os
+import json
+import httpx # Using httpx for async requests
+from typing import Dict, Any, Optional
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
 
-WEATHER_SYSTEM_PROMPT = """You are a Weather Agent. Your task is to fetch and present weather forecast data clearly.
-You will retrieve data from a local forecast service."""
+# System prompt for the WeatherAgent's internal LLM (to parse location from query)
+WEATHER_AGENT_SYSTEM_PROMPT = """You are an assistant that extracts location information from user queries for weather lookups.
+Given the user's query, identify the city name or geographic location they are asking about.
+Respond ONLY with a JSON object containing a single key "location" and the extracted location as its value.
+Example: User query "What's the weather like in London?" -> {"location": "London"}
+Example: User query "Tell me the current temperature in Paris, France." -> {"location": "Paris, France"}
+Example: User query "Is it raining in Tokyo?" -> {"location": "Tokyo"}
+If no specific location is mentioned (e.g. "what is the weather like?", "how is the weather?"), respond with {"location": null}.
+"""
+
+# System prompt for summarizing weather data from API
+WEATHER_SUMMARY_PROMPT_TEMPLATE = """You are an AI assistant that provides clear and concise weather summaries.
+Based on the following weather data (in JSON format), provide a user-friendly, conversational summary.
+Mention the current temperature, feels-like temperature, main weather condition (e.g., sunny, cloudy, rain), humidity, and wind speed.
+Convert temperature from Kelvin to Celsius (Celsius = Kelvin - 273.15).
+If essential data is missing, state that you couldn't retrieve full details.
+
+Weather Data:
+{weather_data_json}
+
+Your conversational summary:
+"""
 
 class WeatherAgent(BaseAgent):
     """Agent for fetching weather forecasts from a local service."""
 
-    def __init__(self):
+    def __init__(self, memory_data_ref: Optional[Dict[str, Any]] = None):
         """Initialize the Weather Agent."""
         super().__init__(
             agent_type="weather",
-            system_prompt=WEATHER_SYSTEM_PROMPT,
+            system_prompt=WEATHER_AGENT_SYSTEM_PROMPT
         )
-        self.forecast_url = "http://127.0.0.1:8008/forecast"
+        self.api_key = os.getenv("OPENWEATHERMAP_API_KEY")
+        if not self.api_key:
+            debug_print("WeatherAgent: WARNING - OPENWEATHERMAP_API_KEY not found in .env. Weather functionality will fail.")
+        self.base_url = "http://api.openweathermap.org/data/2.5/weather"
+        self.memory_data_ref = memory_data_ref if memory_data_ref is not None else {}
 
-    async def get_weather_forecast(self) -> Dict[str, Any]:
-        """Fetch weather forecast data from the local service."""
-        debug_print(f"Fetching weather forecast from {self.forecast_url}")
+    async def get_weather(self, location: str) -> Optional[Dict[str, Any]]:
+        """Fetches current weather data for a given location from OpenWeatherMap."""
+        if not self.api_key:
+            debug_print("WeatherAgent: Missing API key. Cannot fetch weather.")
+            return None
+        if not location:
+            debug_print("WeatherAgent: No location provided.")
+            return None
+
+        params = {
+            'q': location,
+            'appid': self.api_key,
+            'units': 'metric' # Request Celsius directly, though API returns Kelvin by default. We'll use metric for feels_like etc.
+                                # API provides temp in Kelvin by default. If using 'metric', temp is Celsius.
+                                # Let's stick to Kelvin from API and convert, as per original plan, for clarity.
+                                # No, 'metric' gives Celsius. 'standard' (default) gives Kelvin. Let's use metric for direct Celsius.
+        }
+        params_no_units = {
+            'q': location,
+            'appid': self.api_key
+        }
+
+
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(self.forecast_url) as response:
-                    response.raise_for_status()  # Raise an exception for bad status codes
-                    data = await response.json()
-                    debug_print(f"Successfully fetched forecast data: {data}")
-                    return data
-        except aiohttp.ClientConnectorError:
-            debug_print(f"Error: Could not connect to {self.forecast_url}. Ensure the service is running.")
-            return {"error": "Could not connect to the weather service. Please ensure it's running."}
-        except aiohttp.ContentTypeError:
-            debug_print("Error: Weather service did not return valid JSON.")
-            return {"error": "The weather service returned data in an unexpected format."}
+            async with httpx.AsyncClient() as client:
+                # First, try with units=metric to get Celsius directly
+                response = await client.get(self.base_url, params=params)
+                response.raise_for_status() # Raise an exception for HTTP errors (4XX, 5XX)
+                debug_print(f"WeatherAgent: API response for {location} (units=metric): {response.json()}")
+                return response.json()
+        except httpx.HTTPStatusError as e:
+            debug_print(f"WeatherAgent: HTTP error fetching weather for {location} (units=metric): {e.response.status_code} - {e.response.text}")
+            # If units=metric fails (e.g. some locations don't play well with it, though rare for 'q'),
+            # try falling back to standard units (Kelvin) if the error suggests it might be parameter related.
+            # For now, we'll just report the error from the 'metric' attempt.
+            # A more robust fallback could try params_no_units if the error is e.g. 400.
+            return {"error": True, "status_code": e.response.status_code, "message": e.response.json().get("message", "API error") if e.response.content else "API error"}
+        except httpx.RequestError as e:
+            debug_print(f"WeatherAgent: Request error fetching weather for {location}: {e}")
+            return {"error": True, "message": "Network error connecting to weather service."}
         except Exception as e:
-            debug_print(f"Error fetching weather forecast: {str(e)}")
-            return {"error": f"An unexpected error occurred while fetching the forecast: {str(e)}"}
+            debug_print(f"WeatherAgent: Unexpected error fetching weather for {location}: {e}")
+            return {"error": True, "message": f"Unexpected error: {str(e)}"}
 
-    async def process(self, query: str, **kwargs: Any) -> str:
-        """Process a request for weather information, parsing the hourly forecast data."""
+    async def process(self, query: str) -> str:
+        """Processes a weather-related query from the user."""
+        if not self.api_key:
+            return "I can't provide weather information right now as I'm missing the necessary API key configuration."
+
         debug_print(f"WeatherAgent processing query: {query}")
-        forecast_data = await self.get_weather_forecast()
+        extracted_location: Optional[str] = None
 
-        if not forecast_data or "error" in forecast_data:
-            error_msg = forecast_data.get("error", "Could not retrieve weather data.")
-            print(error_msg)
-            return error_msg
+        # Use LLM (BaseAgent.process with WEATHER_AGENT_SYSTEM_PROMPT) to extract location
+        try:
+            location_json_str = await super().process(query)
+            debug_print(f"WeatherAgent: LLM location extraction response: {location_json_str}")
+            location_data = json.loads(location_json_str)
+            extracted_location = location_data.get("location")
+        except json.JSONDecodeError:
+            debug_print("WeatherAgent: Failed to parse JSON from LLM for location extraction. Will check memory for default.")
+            extracted_location = None 
+        except Exception as e:
+            debug_print(f"WeatherAgent: Error during LLM location extraction: {e}. Will check memory for default.")
+            extracted_location = None
 
-        debug_print(f"WeatherAgent received data: {forecast_data}")
+        if not extracted_location:
+            debug_print("WeatherAgent: No location in query from LLM. Checking memory for user's default location.")
+            if isinstance(self.memory_data_ref, dict) and "fact_store" in self.memory_data_ref:
+                for fact in self.memory_data_ref["fact_store"]:
+                    if isinstance(fact, dict) and fact.get("entity", "").lower() == "user" and fact.get("attribute", "").lower() == "default_location":
+                        user_default_location = fact.get("value")
+                        if user_default_location:
+                            extracted_location = user_default_location
+                            debug_print(f"WeatherAgent: Using user default location from memory: {extracted_location}")
+                            break 
+            
+            if not extracted_location: # Still no location after checking memory
+                debug_print("WeatherAgent: No default location found in memory.")
+                return "I couldn't determine the location for the weather forecast from your query, nor find a default location in memory. Please specify a city or area."
+        
+        debug_print(f"WeatherAgent: Final location for weather lookup: {extracted_location}")
+        weather_api_data = await self.get_weather(extracted_location)
+
+        if not weather_api_data:
+            return f"Sorry, I couldn't retrieve weather data for {extracted_location} at the moment due to an unexpected issue with the weather service connection."
+        
+        if weather_api_data.get("error"):
+            api_error_message = weather_api_data.get("message", "an unknown issue")
+            if weather_api_data.get("status_code") == 404:
+                return f"I couldn't find weather information for '{extracted_location}'. Please check the location name and try again."
+            elif weather_api_data.get("status_code") == 401: # Unauthorized
+                 return f"I can't access the weather service right now due to an authentication issue (API key problem). Please check the setup."
+            return f"Sorry, I encountered an error when fetching weather data for {extracted_location}: {api_error_message}."
+
+        # Use LLM to summarize the weather data
+        # Temporarily set a different system prompt for summarization
+        original_system_prompt = self.system_prompt
+        self.system_prompt = WEATHER_SUMMARY_PROMPT_TEMPLATE.format(weather_data_json=json.dumps(weather_api_data))
+        
+        # We are not actually sending a query to the LLM here, the weather data is in the prompt.
+        # So the "query" argument to super().process can be minimal or a placeholder.
+        summary_query_placeholder = "Provide a weather summary based on the data in your system prompt."
 
         try:
-            # Ensure forecast_data is a non-empty dictionary
-            if not isinstance(forecast_data, dict) or not forecast_data:
-                debug_print("WeatherAgent: Forecast data is not a valid non-empty dictionary.")
-                error_msg = f"Sorry, the weather data received was not in the expected format for Zeegse."
-                print(error_msg)
-                return error_msg
-
-            location_name = "Zeegse" # Default to Zeegse
-            
-            # For simplicity, we'll assume the query implies wanting current/near-term weather
-            # unless specific keywords for a longer forecast are present.
-            
-            # Find the current or soonest forecast entry
-            # We need datetime to compare, assuming forecast keys are ISO-like strings
-            import datetime
-            now = datetime.datetime.now()
-            soonest_entry_time_str = None
-            soonest_entry_data = None
-            # min_time_diff = datetime.timedelta.max # Not currently used, can be removed or kept for other logic
-
-            processed_forecasts = []
-            num_forecasts_to_show = 1 
-            target_specific_time_dt = None
-
-            # Try to parse a specific time from the query (very basic parsing)
-            # Example: "weather at 8pm", "temp at 20:00"
-            # This is a simplistic approach and can be significantly improved with more robust parsing.
-            query_lower = query.lower()
-            if " at " in query_lower:
-                try:
-                    time_str_part = query_lower.split(" at ")[1].replace(".","") # Remove periods often used like "at 8 p.m."
-                    # Attempt to parse common time formats, assuming today's date if only time is given
-                    # This will need refinement for different phrasing and for dates other than today.
-                    # For now, let's try a few formats. This is hard without a proper NLP date/time parser.
-                    # Example: "8pm", "20:00"
-                    parsed_time = None
-                    formats_to_try = ["%I%p", "%I %p", "%H:%M"] # e.g., "8pm", "8 pm", "20:00"
-                    for fmt in formats_to_try:
-                        try:
-                            parsed_time = datetime.datetime.strptime(time_str_part.strip(), fmt).time()
-                            break
-                        except ValueError:
-                            continue
-                    
-                    if parsed_time:
-                        # Combine with today's date for comparison, or if a date is also parsed, use that.
-                        # For now, assumes the query refers to a time on the current day if only time is specified.
-                        # Or, if the data timestamps include dates, it will match against those.
-                        target_specific_time_dt = datetime.datetime.combine(now.date(), parsed_time)
-                        debug_print(f"WeatherAgent: Parsed specific target time from query: {target_specific_time_dt}")
-                        num_forecasts_to_show = 1 # We only want this specific time
-                except Exception as e:
-                    # Corrected f-string for the debug message
-                    time_str_part_debug = query_lower.split(" at ")[1] if " at " in query_lower else "[not found]"
-                    debug_print(f"WeatherAgent: Could not parse specific time from query part '{time_str_part_debug}': {e}")
-
-            # Basic keyword check for a multi-hour forecast (prediction) for future
-            if not target_specific_time_dt and any(keyword in query_lower for keyword in ["prediction", "forecast", "later", "next few hours"]):
-                num_forecasts_to_show = 3 
-            
-            # Sort the forecast keys (timestamps) to process them chronologically
-            sorted_timestamps = sorted(forecast_data.keys())
-            debug_print(f"WeatherAgent: Sorted timestamps to process: {sorted_timestamps}")
-            
-            if not sorted_timestamps:
-                debug_print("WeatherAgent: No timestamps found in the forecast data.")
-                error_msg = f"Sorry, I couldn't find any specific forecast times for Zeegse."
-                print(error_msg)
-                return error_msg
-
-            future_forecasts_found = 0
-            
-            for timestamp_str in sorted_timestamps:
-                try:
-                    entry_time = datetime.datetime.fromisoformat(timestamp_str)
-                    debug_print(f"WeatherAgent: Parsed '{timestamp_str}' to datetime: {entry_time}") 
-                    
-                    # If a specific time was requested in the query
-                    if target_specific_time_dt:
-                        # Check if this entry matches the requested time (ignoring seconds/microseconds for flexibility)
-                        if entry_time.year == target_specific_time_dt.year and \
-                           entry_time.month == target_specific_time_dt.month and \
-                           entry_time.day == target_specific_time_dt.day and \
-                           entry_time.hour == target_specific_time_dt.hour and \
-                           entry_time.minute == target_specific_time_dt.minute:
-                            debug_print(f"WeatherAgent: Timestamp {timestamp_str} matches specific target time {target_specific_time_dt}.")
-                            # (Further processing for this specific entry is below)
-                        else:
-                            # If target_specific_time_dt is set, we only care about that exact match.
-                            debug_print(f"WeatherAgent: Timestamp {timestamp_str} does not match specific target {target_specific_time_dt}. Skipping.")
-                            continue 
-                    # If no specific time in query, look for current/future for general requests or predictions
-                    elif entry_time < now and num_forecasts_to_show > 1: # if asking for prediction, skip past entries
-                        debug_print(f"WeatherAgent: Timestamp {timestamp_str} is in the past ({entry_time} < {now}) for a prediction query. Skipping.")
-                        continue
-                    elif entry_time < now and num_forecasts_to_show == 1 and not target_specific_time_dt: # if general query for current, skip past
-                        debug_print(f"WeatherAgent: Timestamp {timestamp_str} is in the past ({entry_time} < {now}) for a current weather query. Skipping.")
-                        continue
-                        
-                    # Proceed to format this entry if it's relevant
-                    # (i.e., it matched target_specific_time_dt, or it's a future entry for a general/prediction query)
-                    
-                    # This condition ensures we only add if it's the specifically targeted past/future time, 
-                    # OR if it's a future time and we haven't collected enough for a prediction/current display.
-                    if future_forecasts_found < num_forecasts_to_show: 
-                        entry_data = forecast_data[timestamp_str]
-                        temp = entry_data.get('temp', 'N/A')
-                        prcp = entry_data.get('prcp', 'N/A') # Precipitation
-                        wspd = entry_data.get('wspd', 'N/A') # Wind speed
-                        rhum = entry_data.get('rhum', 'N/A') # Relative humidity
-                        wdir_sin = entry_data.get('wdir_sin')
-                        wdir_cos = entry_data.get('wdir_cos')
-                        
-                        # Calculate wind direction
-                        wind_direction_cardinal = "N/A"
-                        if wdir_sin is not None and wdir_cos is not None:
-                            import math
-                            # angle in radians from atan2(sin, cos) is typically Y, X relative to positive X-axis
-                            # Meteorological wind direction is usually where the wind is COMING FROM.
-                            # Standard atan2(y,x) gives angle relative to positive x-axis.
-                            # If sin is y (Northward component) and cos is x (Eastward component),
-                            # then atan2(sin, cos) is fine. Let's assume this convention.
-                            angle_rad = math.atan2(wdir_sin, wdir_cos) 
-                            angle_deg = math.degrees(angle_rad)
-                            # Convert from -180 to 180 range to 0 to 360 range
-                            angle_deg = (angle_deg + 360) % 360
-                            
-                            # Convert degrees to cardinal direction
-                            directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", 
-                                          "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"]
-                            index = round(angle_deg / (360. / len(directions))) % len(directions)
-                            wind_direction_cardinal = directions[index]
-
-                        # Simple condition summary (can be improved)
-                        condition = "Clear"
-                        if prcp is not None and isinstance(prcp, (int, float)) and prcp > 0.0:
-                            condition = "Precipitation expected"
-                        elif wspd is not None and isinstance(wspd, (int, float)) and wspd > 15: # Adjusted threshold
-                            condition = "Windy"
-                        elif rhum is not None and isinstance(rhum, (int, float)) and rhum > 90:
-                            condition = "High humidity"
-
-                        forecast_detail = (
-                            f"For {entry_time.strftime('%I:%M %p on %b %d')}:\n"
-                            f"  - Temperature: {temp}°C\n"
-                            f"  - Condition: {condition}\n"
-                            f"  - Precipitation: {prcp}mm\n"
-                            f"  - Wind: {wspd}km/h from {wind_direction_cardinal}\n"
-                            f"  - Humidity: {rhum}%"
-                        )
-                        processed_forecasts.append(forecast_detail)
-                        future_forecasts_found += 1
-                    else:
-                        debug_print(f"WeatherAgent: Already found enough forecasts ({num_forecasts_to_show}). Breaking loop.")
-                        break # Got enough future forecasts
-                except ValueError:
-                    debug_print(f"WeatherAgent: Could not parse timestamp: {timestamp_str}. Skipping entry.")
-                    continue # Skip malformed timestamps
-
-            if not processed_forecasts:
-                error_msg = f"Sorry, I couldn't find any current or future weather information for {location_name}."
-                print(error_msg)
-                return error_msg
-
-            response_intro = f"Here's the weather update for {location_name}:\n"
-            final_response = response_intro + "\n\n".join(processed_forecasts)
-            print(final_response)
-            return final_response
-
+            # The actual data to summarize is embedded in the system_prompt
+            # The query here is just to trigger the LLM call with that prompt.
+            summary = await super().process(summary_query_placeholder) 
         except Exception as e:
-            debug_print(f"Error formatting weather forecast: {str(e)}")
-            error_msg = "I had trouble understanding the weather data format. The raw data might be available in the logs."
-            print(error_msg)
-            return error_msg 
+            debug_print(f"WeatherAgent: Error during LLM weather summarization: {e}")
+            summary = "I retrieved the weather data, but I had trouble summarizing it."
+        finally:
+            self.system_prompt = original_system_prompt # Reset system prompt
+
+        return summary 

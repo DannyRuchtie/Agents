@@ -6,7 +6,6 @@ from .code_agent import CodeAgent
 from .memory_agent import MemoryAgent
 from .scanner_agent import ScannerAgent
 from .vision_agent import VisionAgent
-from .location_agent import LocationAgent
 
 __all__ = [
     'BaseAgent',
@@ -16,5 +15,4 @@ __all__ = [
     'MemoryAgent',
     'ScannerAgent',
     'VisionAgent',
-    'LocationAgent',
 ] 
