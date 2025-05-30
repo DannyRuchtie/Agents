@@ -51,3 +51,4 @@ build/
 *.temp
 *.tmp
 /models
+whereami_tool/
