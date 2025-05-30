@@ -182,4 +182,81 @@ class VisionAgent(BaseAgent):
             return await self.analyze_image(str(filepath), prompt)
             
         except Exception as e:
-            return f"Error in screenshot process: {str(e)}" 
+            return f"Error in screenshot process: {str(e)}"
+
+    async def process(self, query: str) -> str:
+        """Process a query, which might be a request to analyze a passed image path or a general vision query."""
+        # [FORCE_PRINT] VisionAgent.py: process started. # Temporarily disabled as user rolled back
+        debug_print(f"VisionAgent received query: {query}")
+
+        analysis_prefix = "Analyze this image:".lower()
+        # Screenshot commands can be added back later if needed, focusing on path analysis first
+        # capture_command = "capture screen"
+        # analyze_last_command = "analyze last screenshot"
+
+        lower_query = query.lower()
+
+        if lower_query.startswith(analysis_prefix):
+            path_and_prompt_part = query[len(analysis_prefix):].strip()
+            
+            image_path_str = ""
+            user_specific_prompt = "Describe this image in detail."
+            
+            # Try to find a valid image path and separate it from a potential prompt
+            # Common image extensions to look for
+            extensions = [".png", ".jpeg", ".jpg", ".gif", ".webp"]
+            found_path_at_index = -1
+
+            # Iterate backwards through the string to find the last occurrence of an extension
+            # This helps if the prompt accidentally contains something that looks like an extension earlier on.
+            temp_path_candidate = path_and_prompt_part
+            path_identified = False
+
+            for ext in extensions:
+                # Find the last occurrence of the extension
+                last_ext_idx = temp_path_candidate.lower().rfind(ext)
+                if last_ext_idx != -1:
+                    # Potential path ends at last_ext_idx + len(ext)
+                    potential_path = temp_path_candidate[:last_ext_idx + len(ext)]
+                    potential_path_obj = Path(potential_path.strip('\'"')) # Strip quotes for validation
+                    
+                    if potential_path_obj.exists() and potential_path_obj.is_file():
+                        image_path_str = str(potential_path_obj)
+                        # The rest of the string after this path is the prompt
+                        prompt_part = temp_path_candidate[last_ext_idx + len(ext):].strip()
+                        if prompt_part:
+                            user_specific_prompt = prompt_part
+                        path_identified = True
+                        break # Found a valid path
+            
+            if not path_identified:
+                # If no extension-based path found, a simpler split might be attempted,
+                # but this is prone to errors if path has spaces and no quotes.
+                # For now, rely on extension finding. If still no path, it will fail existence check later or be empty.
+                # As a very basic fallback, assume if no prompt was discernible, the whole thing was a path.
+                # This part is tricky without robust parsing like regex offered (when it worked).
+                # Let's try to see if the whole string (after prefix) is a path if above failed.
+                if not image_path_str: # if still no path identified by extension
+                    potential_path_obj = Path(path_and_prompt_part.strip('\'"'))
+                    if potential_path_obj.exists() and potential_path_obj.is_file():
+                         image_path_str = str(potential_path_obj)
+                         # No prompt part is assumed here, default prompt will be used
+                    else:
+                        return f"Could not reliably identify a valid image file path in your request: '{path_and_prompt_part}'. Please ensure the path is correct and ends with a supported extension."
+
+            if not image_path_str: # Should have been caught by return above, but as a safeguard
+                 return "Could not identify an image path in your request."
+
+            # Path validation (redundant if logic above is sound, but good for safety)
+            final_image_path = Path(image_path_str) # image_path_str should be clean now
+            if not final_image_path.exists() or not final_image_path.is_file():
+                return f"Error: The image path specified ('{image_path_str}') does not exist or is not a file."
+            
+            debug_print(f"VisionAgent: Analyzing image from path: {final_image_path} with prompt: '{user_specific_prompt}'.")
+            return await self.analyze_image(str(final_image_path), query=user_specific_prompt)
+        
+        # Add elif for screenshot commands here if re-implementing them
+
+        else:
+            debug_print(f"VisionAgent: Treating as a general vision query (no path prefix): {query}")
+            return await super().process(query) 

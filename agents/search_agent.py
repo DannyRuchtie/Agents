@@ -225,7 +225,8 @@ class SearchAgent(BaseAgent):
             sources_info = []
             text_processed_count = 0
 
-            connector = aiohttp.TCPConnector(ssl=False, enable_cleanup_closed=True)
+            # Use default SSL context by removing ssl=False
+            connector = aiohttp.TCPConnector(enable_cleanup_closed=True)
             async with aiohttp.ClientSession(connector=connector) as session:
                 for i, result in enumerate(search_results):
                     if i >= NUM_RESULTS_TO_PROCESS:
@@ -255,12 +256,16 @@ class SearchAgent(BaseAgent):
                 
                 source_list_str = "\n".join([f"- {s}" for s in sources_info])
                 prompt_for_summary = (
-                    f"Based on the following text from one or more webpages (sources listed below), "
-                    f"please answer the user's question: '{query}'.\n\n"
+                    f"You have been provided with text extracted from multiple web pages (listed under 'Original Sources' below) to answer the user's question: '{query}'.\n\n"
                     f"Combined Extracted Text:\n{all_extracted_text}\n\n"
-                    f"Sources:\n{source_list_str}\n\n"
-                    f"Please provide a concise answer to the question based *only* on the provided text. "
-                    f"If the text doesn't answer the question, say so clearly. Synthesize information if multiple sources cover the topic."
+                    f"User's Question: {query}\n\n"
+                    f"Instructions for your answer:\n"
+                    f"1. Directly answer the user's question: '{query}'.\n"
+                    f"2. Synthesize the information from all provided text into a single, coherent response. Avoid presenting information as if it's from distinct, separate sources in your main answer. Instead, merge the findings and present a unified summary or list of points.\n"
+                    f"3. Ensure your answer is concise and directly addresses the question based *only* on the provided text.\n"
+                    f"4. Do NOT begin your answer with phrases like 'Based on the provided text...' or 'According to the sources...'. Start directly with the information.\n"
+                    f"5. If the text does not contain an answer, clearly state that the information was not found in the provided content.\n\n"
+                    f"Answer a concise response to the user's question '{query}' based on the text above. Your response should be a single, synthesized answer, not a list of points from each source. Start your answer directly without any preamble like 'Based on the text...'. If no information is found, state that clearly.:\n"
                 )
                 
                 summary_answer = await super().process(prompt_for_summary)

@@ -102,7 +102,45 @@ async def process_input(master_agent: MasterAgent, user_input: str):
             voice_output.speak(help_text)
         return
     
+    # Check if the input is a file path and an image
+    try:
+        print(f"[FORCE_PRINT_MAIN] Original user_input: '{user_input}'")
+        # Normalize path (e.g., remove surrounding quotes if dragged from some terminals)
+        normalized_input = user_input.strip('\'"')
+        print(f"[FORCE_PRINT_MAIN] Normalized input: '{normalized_input}'")
+        
+        is_file = os.path.isfile(normalized_input)
+        exists = os.path.exists(normalized_input)
+        print(f"[FORCE_PRINT_MAIN] Path exists: {exists}, Is file: {is_file}")
+
+        if exists and is_file:
+            print(f"[FORCE_PRINT_MAIN] Path is an existing file: '{normalized_input}'")
+            # Check if it's a supported image type
+            supported_extensions = ('.png', '.jpeg', '.jpg', '.gif', '.webp')
+            is_image = normalized_input.lower().endswith(supported_extensions)
+            print(f"[FORCE_PRINT_MAIN] Is image type: {is_image}")
+
+            if is_image:
+                debug_print(f"Input detected as image file path: {normalized_input}") # This is the conditional one
+                print(f"[FORCE_PRINT_MAIN] Confirmed image file. Original query: '{user_input}'")
+                user_input = f"Analyze this image: {normalized_input}"
+                print(f"[FORCE_PRINT_MAIN] Transformed user_input for MasterAgent: '{user_input}'")
+            else:
+                debug_print(f"Input is a file, but not a recognized image type: {normalized_input}")
+                print(f"[FORCE_PRINT_MAIN] File exists, but not a supported image type: '{normalized_input}'")
+        elif '/' in user_input or '\\\\' in user_input: 
+            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' looks like a path but does not exist as a file or is not a file.")
+            pass
+        else:
+            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' does not appear to be a file path.")
+
+    except Exception as e:
+        debug_print(f"Error during file path check: {e}")
+        print(f"[FORCE_PRINT_MAIN] Exception during file path check: {e}")
+        # Proceed with original input if error in path checking
+
     # Process query
+    print(f"[FORCE_PRINT_MAIN] Final user_input to MasterAgent.process: '{user_input}'")
     response = await master_agent.process(user_input)
     print(f"\nAssistant: {response}")
     
