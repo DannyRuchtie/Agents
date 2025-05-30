@@ -67,7 +67,8 @@ class MasterAgent(BaseAgent):
         self.agents = {"memory": self.memory}
         self.agent_descriptions = {
             "master": "Handles general conversation, chat, and direct questions. Also acts as the primary router.",
-            "memory": "Manages and recalls personal information, preferences, and past conversation details."
+            "memory": "Manages and recalls personal information, preferences, and past conversation details.",
+            "get_last_sources": "Retrieves and presents the sources for information recently provided by the search agent."
         }
         
         if is_agent_enabled("personality"):
@@ -204,15 +205,34 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
         
         debug_print(f"MasterAgent processing query: {query}")
         
-        agent_options_str = "\n".join([f"- {name}: {desc}" for name, desc in self.agent_descriptions.items()])
+        # Try to get the last couple of turns for context in routing
+        last_user_query = ""
+        last_assistant_response = ""
+        if len(self.conversation_history) >= 2:
+            # Assuming history is [..., {"role": "user", "content": ...}, {"role": "assistant", "content": ...}]
+            if self.conversation_history[-2]["role"] == "user":
+                last_user_query = self.conversation_history[-2]["content"]
+            if self.conversation_history[-1]["role"] == "assistant":
+                last_assistant_response = self.conversation_history[-1]["content"]
+
+        history_context_for_routing = ""
+        if last_user_query and last_assistant_response:
+            history_context_for_routing = f"\nPrevious turn context for this routing decision:\nUser asked: \"{last_user_query}\"\nAssistant replied: \"{last_assistant_response[:200]}...\"\n"
+        elif self.conversation_history and self.conversation_history[-1]["role"] == "user": # Only last user query
+            history_context_for_routing = f"\nPrevious user query: \"{self.conversation_history[-1]['content']}\"\n"
+
+
+        agent_options_str = "\n".join([f"- {name}: {desc}" for name, desc in self.agent_descriptions.items() if name in self.agents or name == 'master' or name == 'get_last_sources'])
         routing_prompt_addition = f"""
-Given the user query: '{query}'
-And the available specialized agents:
+{history_context_for_routing}Given the current user query: '{query}'
+And the available specialized agents/actions:
 {agent_options_str}
 
-Which agent is best suited to handle this query? 
-If the query is general conversation, or if you can answer it directly with your existing knowledge and personality as the master assistant, respond with 'ROUTE: master'.
-Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the specialized agents listed above (e.g., 'ROUTE: search', 'ROUTE: weather').
+Which agent or action is best suited to handle this query? 
+- If the query is general conversation, or if you can answer it directly with your existing knowledge and personality as the master assistant, respond with 'ROUTE: master'.
+- If the query is a direct follow-up to the 'Assistant replied' context above and can be answered from that, respond with 'ROUTE: master'.
+- If the query seems to be asking for the sources, origin, or evidence for information that was likely provided by a search in the 'Assistant replied' context above, respond with 'ROUTE: get_last_sources'.
+- Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the specialized agents listed above (e.g., 'ROUTE: search', 'ROUTE: weather').
 Do not add any other text to your response other than the route decision.
 """
         
@@ -261,6 +281,13 @@ Do not add any other text to your response other than the route decision.
             debug_print(f"MasterAgent handling query directly: {query}")
             # This call to super().process will stream the answer to stdout
             final_response = await super().process(query) 
+        elif chosen_agent_name == "get_last_sources":
+            if "search" in self.agents and hasattr(self.agents["search"], "get_last_retrieved_sources"):
+                debug_print(f"MasterAgent retrieving last sources from SearchAgent.")
+                final_response = self.agents["search"].get_last_retrieved_sources() # This is not async
+            else:
+                debug_print(f"SearchAgent not available or doesn't support get_last_retrieved_sources.")
+                final_response = "I can't retrieve the sources right now. The search functionality might not be available or I couldn't find previous search details."
         elif chosen_agent_name in self.agents:
             debug_print(f"MasterAgent routing to {chosen_agent_name} for query: {query}")
             # The specialist agent's process method is now expected to print its own output (if any)

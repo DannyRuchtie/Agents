@@ -5,6 +5,7 @@ import aiohttp
 from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
 import asyncio
+import ssl
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
@@ -31,6 +32,7 @@ class SearchAgent(BaseAgent):
             agent_type="search",
             system_prompt=SEARCH_SYSTEM_PROMPT,
         )
+        self.last_source_list_str: Optional[str] = None # Added to store last sources
         
         # Get Google API credentials
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -225,8 +227,14 @@ class SearchAgent(BaseAgent):
             sources_info = []
             text_processed_count = 0
 
-            # Use default SSL context by removing ssl=False
-            connector = aiohttp.TCPConnector(enable_cleanup_closed=True)
+            # Create a more specific SSL context
+            ssl_context = ssl.create_default_context()
+            # You might need to adjust properties on ssl_context if specific errors arise,
+            # e.g., ssl_context.check_hostname = False (less secure, for debugging)
+            # or ssl_context.minimum_version / maximum_version
+            ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2 # Explicitly set minimum TLS version
+
+            connector = aiohttp.TCPConnector(ssl=ssl_context, enable_cleanup_closed=True)
             async with aiohttp.ClientSession(connector=connector) as session:
                 for i, result in enumerate(search_results):
                     if i >= NUM_RESULTS_TO_PROCESS:
@@ -270,7 +278,17 @@ class SearchAgent(BaseAgent):
                 
                 summary_answer = await super().process(prompt_for_summary)
                 
-                return f"{summary_answer}\n\nSources:\n{source_list_str}"
+                # Store the sources before conditional return
+                self.last_source_list_str = source_list_str
+
+                # Conditionally append sources
+                if "source" in query.lower() or \
+                   "sources" in query.lower() or \
+                   "where did you find" in query.lower() or \
+                   "what are your sources" in query.lower():
+                    return f"{summary_answer}\n\nSources:\n{source_list_str}"
+                else:
+                    return summary_answer
             else:
                 # Fallback if no text could be extracted from any of the top N pages
                 formatted_initial_results = self.format_results(search_results)
@@ -279,4 +297,10 @@ class SearchAgent(BaseAgent):
 
         except Exception as e:
             debug_print(f"SearchAgent: Error processing search query '{query}': {str(e)}")
-            return f"Sorry, I encountered an issue while searching for '{query}'. Details: {str(e)}" 
+            return f"Sorry, I encountered an issue while searching for '{query}'. Details: {str(e)}"
+
+    def get_last_retrieved_sources(self) -> Optional[str]:
+        """Returns the string list of sources from the most recent 'process' call."""
+        if self.last_source_list_str:
+            return f"Sources from the last search:\n{self.last_source_list_str}"
+        return "I don't have any specific sources from my last search to share, or I haven't performed a search recently." 
