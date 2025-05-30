@@ -4,6 +4,7 @@ langchain-community==0.0.38
 langchain==0.1.20
 langchain-text-splitters>=0.0.1
 openai==1.10.0
+ollama>=0.2.0
 httpx
 httpcore>=1.0.0
 python-dotenv==1.0.0
@@ -42,5 +43,4 @@ webdriver-manager
 tiktoken
 # PyMuPDF
 fitz
-# Pillow (PIL)
-Pillow 
+# Pillow (PIL) 

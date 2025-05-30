@@ -1,370 +1,158 @@
-# Personal AI Assistant
+# Personal AI Assistant: Your Conversational Super-Agent
 
-Your friendly AI assistant that acts like a close friend who knows you well and is always ready to help. It remembers your conversations, family details, and preferences, making every interaction personal and natural. Think of it as having a knowledgeable friend who's always there to chat, help with tasks, or find information - all while keeping the conversation casual and fun.
+Welcome to your Personal AI Assistant! This isn't just another chatbot; it's a powerful, multi-agent system designed to be your knowledgeable and conversational friend. It understands your needs, remembers your preferences, and can call upon a team of specialized AI agents to perform a wide variety of tasks – from searching the web and writing code to analyzing images and even accessing your webcam (with your permission!).
 
-## What Makes This Special?
+Built with flexibility in mind, you can choose to power its intelligence with cutting-edge OpenAI models or run it locally using Ollama for greater privacy and control.
 
-- **Acts Like a Real Friend**: Not just an AI - it's a friendly presence that knows you, your family, and your preferences
-- **Natural Conversations**: Chats like a real person, with appropriate humor and personality
-- **Remembers Everything**: Uses past conversations to make interactions more personal
-- **Always Helpful**: Combines being friendly with being genuinely useful
-- **Voice Enabled**: Can speak responses naturally, making it feel more like talking to a friend
+## Core Philosophy
 
-## How It Behaves
+- **Conversational & Friendly**: Interacts naturally, like a close friend who's always ready to help.
+- **Intelligent Routing**: The Master Agent understands your query and delegates to the best specialized agent.
+- **Modular Agents**: A suite of agents, each with a specific skill set, working in harmony.
+- **Extensible**: Designed to easily incorporate new agents and capabilities.
+- **Choice of LLM**: Supports both OpenAI (cloud) and Ollama (local) language models.
+- **Voice Enabled**: Can respond with voice output for a more engaging experience.
 
-The assistant is designed to be your friendly helper who:
-- Greets you warmly and remembers previous conversations
-- Uses casual, natural language instead of formal responses
-- Brings up relevant details about you and your family when appropriate
-- Keeps things light and fun while still being helpful
-- Adapts its personality to match your preferences
+## Meet the Agents
 
-### Personality Traits
+Our assistant coordinates a team of specialized agents:
 
-The assistant's personality is customizable but always maintains a friendly, helpful demeanor:
+-   **Master Agent**: The conductor of the orchestra. Handles general conversation, understands your intent, and routes tasks to the appropriate specialist.
+-   **Memory Agent**: Remembers your personal information, preferences, and past conversation details to personalize interactions. (Always active)
+-   **Search Agent**: Performs intelligent web searches to find up-to-date information.
+-   **Writer Agent**: Assists with writing tasks like composing emails, summaries, or creative text.
+-   **Code Agent**: Helps with programming tasks, writing code, debugging, and explaining code snippets.
+-   **Scanner Agent**: Scans and analyzes files and documents for information or insights.
+-   **Vision Agent**: Analyzes and understands explicitly provided image files or image paths.
+-   **Camera Agent**: Captures images using your webcam (requires your permission) and uses the Vision Agent to describe what it sees.
+-   **Screen Agent**: Captures your current live screen content and describes it using the Vision Agent. Useful for queries like "what am I looking at?"
+-   **Learning Agent**: Learns from interactions to improve responses and system performance over time.
+-   **Weather Agent**: Fetches current weather conditions and forecasts.
+-   **Time Agent**: Provides the current date and time.
+-   **Calculator Agent**: Handles mathematical calculations and evaluates expressions.
+-   **Email Agent**: Can connect to your Gmail account to check for new emails and (soon) send emails. (Requires setup and authorization)
+-   **Personality Agent**: Analyzes interactions to understand and adapt to your personality and communication style.
 
-- **Humor**: Can be witty and fun (adjustable from subtle to more playful)
-- **Formality**: Keeps things casual like a friend (adjustable to your comfort level)
-- **Empathy**: Shows understanding and support when needed
-- **Engagement**: Shows genuine interest in your questions and concerns
-- **Enthusiasm**: Maintains an upbeat, positive attitude
-
-### Example Conversations
-
-```
-You: Hi there!
-Assistant: Hey! Great to see you! How can I help you today? 😊
-
-You: Can you remind me what my kids' names are?
-Assistant: Of course! You have two wonderful children - Lena and Tobias! How are they doing?
-
-You: I need help planning a trip
-Assistant: I'd love to help you plan something! Given that you have two kids, Lena and Tobias, 
-should we look for family-friendly destinations? I remember we talked about Bali before - 
-is that still interesting, or would you like to explore other options? 😊
-
-You: What's new in tech?
-Assistant: Let me check that for you! I know you're interested in AI and development, 
-so I'll focus on those areas while keeping it practical and relevant to your work.
-```
-
-## Core Features
-
-### 🤖 Specialized Agents
-- **Search Agent**: Intelligent web searching with context awareness
-- **Writer Agent**: Advanced text composition and summarization
-- **Code Agent**: Code generation and explanation
-- **Memory Agent**: Long-term information storage and retrieval
-- **Scanner Agent**: Document vectorization and semantic search
-- **Vision Agent**: Image analysis and screen content understanding
-- **Location Agent**: Location-aware services and recommendations
-- **Learning Agent**: System improvement through usage analysis
-
-### 🎯 Key Capabilities
-- Local text-to-speech with customizable voices
-- Document analysis and semantic search
-- Screen capture and image analysis
-- Location-aware assistance
-- Continuous learning and improvement
-- Web search and information synthesis
+*(Agent availability can be configured in `config/settings.py` or `config/settings.json`)*
 
 ## Getting Started
 
 ### Prerequisites
-- Python 3.11 or higher
-- OpenAI API key
-- Google Custom Search API key (for web search)
-- macOS (for full feature compatibility)
+
+-   Python 3.11 or higher.
+-   `pip` for installing Python packages.
+-   **For Ollama (Local LLM):**
+    -   Ollama installed and running. Download from [ollama.com](https://ollama.com/).
+    -   At least one model pulled, e.g., `ollama pull gemma3:4b-it-q4_K_M` (or your preferred model).
+-   **For OpenAI (Cloud LLM):**
+    -   An OpenAI API key.
+-   **For Web Search (Search Agent):**
+    -   A Google API Key.
+    -   A Google Programmable Search Engine ID.
+-   **For Camera/Screen Agents on macOS:** You may need to grant terminal/Python permission to access the camera and screen recording in your System Settings (Privacy & Security).
 
 ### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/agents.git
-   cd agents
-   ```
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
+1.  **Clone the Repository:**
+    ```bash
+    git clone <your-repository-url>
+    cd <repository-directory>
+    ```
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+2.  **Create and Activate a Virtual Environment:**
+    (Recommended to avoid conflicts with global packages)
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+    *(On Windows, use `.venv\\Scripts\\activate`)*
 
-4. Set up your environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Configure the following in your `.env` file:
-   ```bash
-   # OpenAI Configuration
-   OPENAI_API_KEY=your_openai_api_key
-   
-   # Google Custom Search Configuration
-   GOOGLE_API_KEY=your_google_api_key
-   GOOGLE_SEARCH_ENGINE_ID=your_search_engine_id
-   
-   # Voice Settings (optional)
-   DEFAULT_VOICE=af_sarah
-   DEFAULT_VOICE_SPEED=1.0
-   
-   # API Configuration
-   API_HOST=localhost
-   API_PORT=8000
-   RATE_LIMIT=60  # requests per minute
-   ```
+3.  **Install Dependencies:**
+    Ensure your `requirements.txt` is up-to-date, then run:
+    ```bash
+    pip install -r requirements.txt
+    pip install ollama # If not already in requirements.txt
+    ```
+    *(We'll generate/update `requirements.txt` later if needed)*
 
-### Running the Assistant
-Start the API server:
-```bash
-python -m api.run
-```
+### Configuration
 
-For the macOS app:
-1. Open the Xcode project in the `AgentAssistant` directory
-2. Build and run the project
-3. The app will appear as a floating window with a black circle
+1.  **Environment Variables (`.env` file):**
+    Create a `.env` file in the root directory of the project by copying the example if provided, or create it manually:
+    ```
+    touch .env
+    ```
+    Add the following necessary API keys and configurations:
 
-### Available Endpoints
-All API endpoints are available at `http://localhost:8000` by default. See the API Documentation section for details.
+    ```env
+    # For OpenAI LLM Provider & Embeddings
+    OPENAI_API_KEY="your_openai_api_key_here"
 
-## Voice Output Guide
+    # For Search Agent (Google Custom Search)
+    GOOGLE_API_KEY="your_google_api_key_here"
+    GOOGLE_CSE_ID="your_google_programmable_search_engine_id_here"
 
-### Voice Settings
-```bash
-# Check voice status
-voice status
+    # Other optional environment variables can be added here
+    ```
+    **Important**: Never commit your `.env` file to version control. Add `.env` to your `.gitignore` file.
 
-# Enable/disable voice
-enable voice
-disable voice
+2.  **Ollama Setup (if using as LLM provider):**
+    -   Ensure the Ollama application is running.
+    -   Pull the desired model. The default configured in the app for Ollama is `gemma3:4b-it-q4_K_M`, but you can change this in `config/settings.py` (`LLM_PROVIDER_SETTINGS["ollama_default_model"]`).
+        ```bash
+        ollama pull gemma3:4b-it-q4_K_M
+        ```
+        Or list available models: `ollama list`
 
-# Change voice
-set voice [name]  # Available: am_michael, af_bella, bf_emma, bm_george, af_sarah, af_sky
+3.  **LLM Provider Selection:**
+    You can choose your LLM provider when running the assistant. See "Running the Assistant" below. The default is set to Ollama.
 
-# Adjust speech speed
-set voice speed [0.5-2.0]  # 1.0 is normal, 2.0 is twice as fast
-```
+4.  **Other Settings (`config/settings.py` and `config/settings.json`):**
+    Advanced settings, such as agent enablement, voice preferences (TTS provider, voice model), and default LLM models, are managed in `config/settings.py`. These settings are saved to and loaded from `config/settings.json` at runtime. You can modify `config/settings.json` directly or edit the defaults in `config/settings.py` (which will regenerate the JSON if it's deleted or missing sections).
 
-### Available Voices
-- `am_michael`: Adult male voice
-- `af_bella`: Adult female voice
-- `bf_emma`: British female voice
-- `bm_george`: British male voice
-- `af_sarah`: Adult female voice (default)
-- `af_sky`: Adult female voice (alternative)
+## Running the Assistant
 
-## API Documentation
+Navigate to the project's root directory in your terminal (ensure your virtual environment is activated).
 
-### Base URL
-```
-http://localhost:8000
-```
+-   **To run with the default LLM provider (Ollama):**
+    ```bash
+    python main.py
+    ```
 
-### Endpoints
+-   **To explicitly specify Ollama:**
+    ```bash
+    python main.py --llm ollama
+    ```
 
-#### Status Check
-```bash
-GET /
+-   **To run with OpenAI:**
+    ```bash
+    python main.py --llm openai
+    ```
 
-Response:
-{
-    "status": "ok",
-    "message": "Agents API is running",
-    "version": "1.0.0"
-}
-```
+You'll see a welcome message and a `You:` prompt.
 
-#### Send Query
-```bash
-POST /query
-Content-Type: application/json
+## Basic Usage
 
-Request Body:
-{
-    "query": "your question here"
-}
+-   Simply type your questions or commands and press Enter.
+-   **Exit:** Type `exit` to close the assistant.
+-   **Help:** Type `help` to see a list of available commands (if implemented in `main.py`'s `process_input`).
+-   **Voice Output:**
+    -   Voice output can be toggled using commands like `voice on`/`voice off` (if implemented).
+    -   The default TTS provider (e.g., OpenAI) and voice preferences are set in `config/settings.py` under `VOICE_SETTINGS`.
 
-Response:
-{
-    "status": "success",
-    "response": "assistant's response"
-}
-```
+## Development Notes
 
-#### List Agents
-```bash
-GET /agents
+-   **Adding New Agents**:
+    1.  Create your new agent class, typically inheriting from `BaseAgent`.
+    2.  Implement the `process(self, query: str)` method.
+    3.  Add initialization logic for your agent in `MasterAgent.__init__`.
+    4.  Update `MasterAgent.agent_descriptions` and the routing prompt in `MasterAgent.process` to include your new agent and when it should be used.
+    5.  Add default settings for your agent (e.g., enable/disable status) in `config/settings.py`.
+-   **Debugging**: Set `debug_mode: True` in `SYSTEM_SETTINGS` in `config/settings.py` (or `config/settings.json`) to see detailed debug prints.
 
-Response:
-{
-    "agents": [
-        {
-            "type": "memory",
-            "enabled": true
-        },
-        {
-            "type": "search",
-            "enabled": true
-        },
-        // ... other agents
-    ],
-    "total": 8
-}
-```
+---
 
-#### Voice Control
-```bash
-# Get voice status
-GET /voice/status
-
-Response:
-{
-    "status": "success",
-    "voice_enabled": true,
-    "current_voice": "af_sarah",
-    "speed": 1.0,
-    "available_voices": ["am_michael", "af_bella", "bf_emma", "bm_george", "af_sarah", "af_sky"]
-}
-
-# Enable voice
-POST /voice/enable
-
-# Disable voice
-POST /voice/disable
-```
-
-### Rate Limiting
-- Default rate limit: 60 requests per minute
-- Endpoints return 429 Too Many Requests if rate limit is exceeded
-
-## Chat Integration Guide
-
-### Implementing Chat in External Applications
-
-Here's how to implement a chat interface using the API:
-
-```python
-import requests
-import json
-
-class AgentChatClient:
-    def __init__(self, base_url="http://localhost:8000"):
-        self.base_url = base_url
-        
-    def check_connection(self):
-        response = requests.get(f"{self.base_url}/")
-        return response.status_code == 200
-    
-    def send_message(self, message):
-        response = requests.post(
-            f"{self.base_url}/query",
-            json={"query": message},
-            headers={"Content-Type": "application/json"}
-        )
-        return response.json()
-```
-
-### Example Usage
-
-```python
-# Initialize the chat client
-chat = AgentChatClient()
-
-# Check if API is available
-if chat.check_connection():
-    # Start a conversation
-    response = chat.send_message("Hello! How are you?")
-    print(response['response'])
-    
-    # Continue the conversation (context is maintained by the API)
-    response = chat.send_message("What was my previous message?")
-    print(response['response'])
-```
-
-### Swift Implementation
-
-For iOS/macOS applications:
-
-```swift
-class AgentChat {
-    private let baseURL = "http://localhost:8000"
-    
-    func sendMessage(_ message: String) async throws -> String {
-        guard let url = URL(string: "\(baseURL)/query") else {
-            throw URLError(.badURL)
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body = ["query": message]
-        request.httpBody = try JSONEncoder().encode(body)
-        
-        let (data, _) = try await URLSession.shared.data(for: request)
-        let response = try JSONDecoder().decode(QueryResponse.self, from: data)
-        return response.response
-    }
-}
-
-// Usage in SwiftUI
-struct ChatView: View {
-    @State private var messages: [Message] = []
-    @State private var newMessage = ""
-    private let chat = AgentChat()
-    
-    var body: some View {
-        VStack {
-            // Messages list
-            ScrollView {
-                ForEach(messages) { message in
-                    MessageRow(message: message)
-                }
-            }
-            
-            // Input field
-            HStack {
-                TextField("Type a message...", text: $newMessage)
-                Button("Send") {
-                    Task {
-                        await sendMessage()
-                    }
-                }
-            }
-        }
-    }
-    
-    func sendMessage() async {
-        do {
-            let response = try await chat.sendMessage(newMessage)
-            messages.append(Message(text: newMessage, isUser: true))
-            messages.append(Message(text: response, isUser: false))
-            newMessage = ""
-        } catch {
-            print("Error: \(error)")
-        }
-    }
-}
-```
-
-### Key Features
-- Messages are processed in context (the API maintains conversation history)
-- Responses include the assistant's personality traits
-- Support for both synchronous and asynchronous implementations
-- Error handling for network and API issues
-- Rate limiting compliance built into examples
-
-### Best Practices
-1. Implement retry logic for failed requests
-2. Handle rate limiting (429) responses gracefully
-3. Show loading states during API calls
-4. Maintain local message history for offline viewing
-5. Implement proper error handling and user feedback
+This README provides a comprehensive guide to getting your Personal AI Assistant up and running. Enjoy your new conversational friend!
 
 ## Personality Settings
 
