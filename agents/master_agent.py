@@ -32,6 +32,7 @@ from agents.learning_agent import LearningAgent
 from agents.weather_agent import WeatherAgent
 from agents.time_agent import TimeAgent
 from agents.calculator_agent import CalculatorAgent
+from agents.email_agent import EmailAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
@@ -85,11 +86,12 @@ class MasterAgent(BaseAgent):
             "learning": ("agents.learning_agent", "LearningAgent", "Learns from interactions to improve responses and system performance over time."),
             "weather": ("agents.weather_agent", "WeatherAgent", "Fetches current weather conditions and forecasts for specified locations."),
             "time": ("agents.time_agent", "TimeAgent", "Provides the current date and time."),
-            "calculator": ("agents.calculator_agent", "CalculatorAgent", "Handles mathematical calculations and evaluates expressions.")
+            "calculator": ("agents.calculator_agent", "CalculatorAgent", "Handles mathematical calculations and evaluates expressions."),
+            "email": ("agents.email_agent", "EmailAgent", "Manages Gmail, checks for new emails, and can send emails.")
         }
 
         for name, (module_path, class_name, description) in agent_initializers.items():
-            if is_agent_enabled(name) or name == "calculator":
+            if is_agent_enabled(name) or name == "calculator" or name == "email":
                 debug_print(f"Initializing {class_name}...")
                 try:
                     module = __import__(module_path, fromlist=[class_name])
@@ -214,6 +216,7 @@ Which agent or action is best suited to handle this query?
 - If the query is a direct follow-up to the 'Assistant replied' context above and can be answered from that, respond with 'ROUTE: master'.
 - If the query seems to be asking for the sources, origin, or evidence for information that was likely provided by a search in the 'Assistant replied' context above, respond with 'ROUTE: get_last_sources'.
 - If the query is primarily a mathematical calculation or requires evaluation of a mathematical expression (e.g., 'what is 2 plus 3', 'calculate 5 factorial', 'solve 10 * (3+2)'), respond with 'ROUTE: calculator'.
+- If the query relates to managing emails (checking new emails, reading emails, sending emails, e.g., 'do I have new mail?', 'send an email to bob about the meeting'), respond with 'ROUTE: email'.
 - Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the specialized agents listed above (e.g., 'ROUTE: search', 'ROUTE: weather').
 Do not add any other text to your response other than the route decision.
 """
@@ -277,6 +280,13 @@ Do not add any other text to your response other than the route decision.
             else:
                 debug_print(f"CalculatorAgent not available. Defaulting to master.")
                 final_response = await super().process(f"I don't have a calculator agent available right now, but I'll try to help with your query: {query}")
+        elif chosen_agent_name == "email":
+            if "email" in self.agents:
+                debug_print(f"MasterAgent routing to email for query: {query}")
+                final_response = await self.agents["email"].process(query)
+            else:
+                debug_print(f"EmailAgent not available. Defaulting to master.")
+                final_response = await super().process(f"I don't have an email agent available right now, but I'll try to help with your query: {query}")
         elif chosen_agent_name in self.agents:
             debug_print(f"MasterAgent routing to {chosen_agent_name} for query: {query}")
             # The specialist agent's process method is now expected to print its own output (if any)
