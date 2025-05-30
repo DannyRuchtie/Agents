@@ -9,6 +9,7 @@ CONFIG_DIR = ROOT_DIR / "config"
 AGENTS_DIR = ROOT_DIR / "agents"
 MODELS_DIR = ROOT_DIR / "models"
 UTILS_DIR = ROOT_DIR / "utils"
+TEMP_DIR = ROOT_DIR / "temp_files"
 
 # Agent-specific directories
 AGENTS_DOCS_DIR = ROOT_DIR / "agents_docs"
@@ -21,7 +22,8 @@ DIRECTORIES = {
     'vectorstore': AGENTS_DOCS_DIR / 'vectorstore',
     'learning_data': AGENTS_DOCS_DIR / 'learning_data',
     'static': AGENTS_DOCS_DIR / 'static',
-    'templates': AGENTS_DOCS_DIR / 'templates'
+    'templates': AGENTS_DOCS_DIR / 'templates',
+    'temp': TEMP_DIR
 }
 
 def get_path(directory_name: str) -> Path:
@@ -46,6 +48,7 @@ def ensure_directories():
         MODELS_DIR,
         UTILS_DIR,
         AGENTS_DOCS_DIR,
+        TEMP_DIR
     ]
     
     for directory in base_dirs:

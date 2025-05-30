@@ -31,14 +31,14 @@ AGENT_SETTINGS = {
         "description": "Analyzes images and screen content"
     },
     "location": {
-        "enabled": True,
+        "enabled": False,
         "description": "Provides location information and travel assistance"
     },
     "learning": {
         "enabled": True,
         "description": "Improves system through conversation monitoring"
     },
-    "personality_agent": {
+    "personality": {
         "enabled": True,
         "description": "Learns and adapts to user's personality and preferences"
     },
@@ -49,6 +49,10 @@ AGENT_SETTINGS = {
     "time": {
         "enabled": True,
         "description": "Provides the current date and time"
+    },
+    "screen": {
+        "enabled": True,
+        "description": "Captures the screen and uses VisionAgent to describe it"
     }
 }
 
@@ -123,7 +127,7 @@ SYSTEM_SETTINGS = {
     "os_type": "macos",  # Operating system
     "has_location_access": True,  # Whether location services are enabled
     "has_screen_access": True,  # Whether screen capture is enabled
-    "debug_mode": False,  # Debug mode off by default
+    "debug_mode": True,  # Debug mode ON by default for now
     "app_path": str(Path(__file__).resolve().parent.parent) # Added app_path, resolves to project root
 }
 
