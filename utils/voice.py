@@ -13,7 +13,7 @@ import time
 from typing import Optional
 
 from config.settings import VOICE_SETTINGS, SYSTEM_SETTINGS, is_debug_mode, debug_print
-from config.openai_config import get_client # To get the configured OpenAI client
+from config.openai_config import get_openai_client # Changed from get_client
 
 def check_input():
     """Check for input without blocking."""
@@ -25,7 +25,7 @@ class VoiceOutput:
     """Handles Text-to-Speech using OpenAI and plays audio via pygame."""
     
     def __init__(self):
-        self.client: Optional[OpenAI] = get_client() # Get the shared OpenAI client instance
+        self.client: Optional[OpenAI] = get_openai_client() # Get the shared OpenAI client instance
         self.temp_dir = Path(SYSTEM_SETTINGS.get("app_path", tempfile.gettempdir())) / "temp_audio"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
         

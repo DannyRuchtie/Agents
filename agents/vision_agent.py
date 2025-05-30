@@ -138,7 +138,6 @@ class VisionAgent(BaseAgent):
                 response = await super().process(
                     input_text="",  # Empty input text since we're using messages
                     messages=messages,  # Pass the formatted messages
-                    model="gpt-4o-mini",  # Using GPT-4o mini for vision tasks
                     max_tokens=300,
                     response_format={"type": "text"}  # Ensure text response
                 )

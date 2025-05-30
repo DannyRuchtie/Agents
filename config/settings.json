@@ -32,7 +32,7 @@
       "enabled": true,
       "description": "Improves system through conversation monitoring"
     },
-    "personality_agent": {
+    "personality": {
       "enabled": true,
       "description": "Learns and adapts to user's personality and preferences"
     },
@@ -43,7 +43,25 @@
     "time": {
       "enabled": true,
       "description": "Provides the current date and time"
+    },
+    "screen": {
+      "enabled": true,
+      "description": "Captures the screen and uses VisionAgent to describe it"
+    },
+    "camera": {
+      "enabled": true,
+      "description": "Captures images from webcam and uses VisionAgent to describe them"
+    },
+    "personality_agent": {
+      "enabled": true,
+      "description": "Learns and adapts to user's personality and preferences"
     }
+  },
+  "llm_provider_settings": {
+    "default_provider": "openai",
+    "ollama_base_url": "http://localhost:11434",
+    "ollama_default_model": "gemma3:4b-it-q4_K_M",
+    "openai_default_model": "gpt-4.1-2025-04-14"
   },
   "personality_settings": {
     "humor_level": 0.8,

@@ -4,6 +4,7 @@ import os
 import sys
 import select
 import threading
+import argparse
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -31,7 +32,8 @@ from config.settings import (
     get_agent_info,
     save_settings,
     is_debug_mode,
-    debug_print
+    debug_print,
+    LLM_PROVIDER_SETTINGS
 )
 
 def check_input() -> Optional[str]:
@@ -161,6 +163,22 @@ def main():
     # Load .env, override existing env vars if any, and be verbose if file not found
     loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=True)
     print(f"[DEBUG] load_dotenv successful: {loaded_successfully}")
+
+    # Argument parsing for LLM provider
+    parser = argparse.ArgumentParser(description="Run the AI Assistant with a specified LLM provider.")
+    parser.add_argument(
+        "--llm",
+        type=str,
+        choices=["openai", "ollama"],
+        default=LLM_PROVIDER_SETTINGS["default_provider"],
+        help="Specify the LLM provider to use (openai or ollama). Defaults to ollama."
+    )
+    args = parser.parse_args()
+
+    # Update the setting based on the command-line argument
+    LLM_PROVIDER_SETTINGS["default_provider"] = args.llm
+    save_settings() # Save the potentially updated setting
+    print(f"[INFO] Using LLM Provider: {args.llm.upper()}")
 
     # ---- TEMPORARY DEBUG ----
     # loaded_google_api_key = os.getenv("GOOGLE_API_KEY")

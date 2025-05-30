@@ -60,6 +60,14 @@ AGENT_SETTINGS = {
     }
 }
 
+# LLM Provider Settings
+LLM_PROVIDER_SETTINGS = {
+    "default_provider": "ollama",  # "openai" or "ollama"
+    "ollama_base_url": "http://localhost:11434",
+    "ollama_default_model": "gemma3:4b-it-q4_K_M", # User specified model
+    "openai_default_model": "gpt-4.1-nano-2025-04-14" # Updated OpenAI default model
+}
+
 # Personality settings
 PERSONALITY_SETTINGS = {
     "humor_level": 0.8,  # 0-1 scale
@@ -142,6 +150,7 @@ def save_settings():
     """Save current settings to file."""
     settings = {
         "agent_settings": AGENT_SETTINGS,
+        "llm_provider_settings": LLM_PROVIDER_SETTINGS,
         "personality_settings": PERSONALITY_SETTINGS,
         "personality_traits": PERSONALITY_TRAITS,
         "voice_settings": VOICE_SETTINGS,
@@ -157,7 +166,7 @@ def save_settings():
 
 def load_settings():
     """Load settings from file."""
-    global AGENT_SETTINGS, PERSONALITY_SETTINGS, PERSONALITY_TRAITS, VOICE_SETTINGS, SYSTEM_SETTINGS
+    global AGENT_SETTINGS, PERSONALITY_SETTINGS, PERSONALITY_TRAITS, VOICE_SETTINGS, SYSTEM_SETTINGS, LLM_PROVIDER_SETTINGS
     
     if SETTINGS_FILE.exists():
         try:
@@ -165,6 +174,7 @@ def load_settings():
                 settings = json.load(f)
                 
             AGENT_SETTINGS.update(settings.get("agent_settings", {}))
+            LLM_PROVIDER_SETTINGS.update(settings.get("llm_provider_settings", {}))
             PERSONALITY_SETTINGS.update(settings.get("personality_settings", {}))
             PERSONALITY_TRAITS.update(settings.get("personality_traits", {}))
             VOICE_SETTINGS.update(settings.get("voice_settings", {}))

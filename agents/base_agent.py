@@ -4,8 +4,9 @@ from datetime import datetime
 import os
 import sys # Added for streaming
 
-from config.openai_config import get_client, get_agent_config
-from config.settings import debug_print
+from config.openai_config import get_agent_config
+from config.settings import debug_print, LLM_PROVIDER_SETTINGS
+from agents.llm_providers import get_llm_provider
 
 # Image file extensions that should be routed to vision agent
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
@@ -29,7 +30,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
         max_history: int = 10
     ):
         """Initialize the base agent."""
-        self.client = get_client()
+        self.llm_provider = get_llm_provider()
         self.config = get_agent_config(agent_type)
         self.system_prompt = system_prompt
         self.max_history = max_history
@@ -119,30 +120,34 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             
             # Extract model configuration
             config = {
-                "model": kwargs.get("model", self.config["model"]),  # Allow model override
+                # "model": kwargs.get("model", self.config.get("model")), # Allow model override, provider will use its default if None
+                # Let the provider determine the model based on its defaults or kwargs passed to process
                 "temperature": kwargs.get("temperature", self.config.get("temperature", 0.7)),
                 "max_tokens": kwargs.get("max_tokens", self.config.get("max_tokens", 4096)),
-                "seed": kwargs.get("seed", self.config.get("seed")),\
-                "response_format": kwargs.get("response_format", self.config.get("response_format", {"type": "text"}))
+                "seed": kwargs.get("seed", self.config.get("seed")),
+                "response_format": kwargs.get("response_format", self.config.get("response_format")) # Let provider handle default if None
             }
+            # Add model from kwargs if explicitly passed to process, otherwise provider handles it
+            if "model" in kwargs:
+                config["model"] = kwargs["model"]
             
-            # Make the API call with streaming
-            stream = self.client.chat.completions.create(
+            # Filter out None values from config to avoid sending them if not set
+            config = {k: v for k, v in config.items() if v is not None}
+            
+            # Make the API call with streaming via the provider
+            stream = self.llm_provider.stream_chat_completion(
                 messages=current_messages,
-                stream=True, # Enable streaming
-                **config
+                config=config
             )
             
             assistant_response_parts = []
-            for chunk in stream:
-                content = chunk.choices[0].delta.content
-                if content is not None:
-                    sys.stdout.write(content)
+            async for content_chunk in stream:
+                if content_chunk is not None:
+                    sys.stdout.write(content_chunk)
                     sys.stdout.flush()
-                    assistant_response_parts.append(content)
+                    assistant_response_parts.append(content_chunk)
             
-            sys.stdout.write("\\n") # Add a newline after the streamed response is complete
-            sys.stdout.flush()
+            sys.stdout.write("\n") # Add a newline after the streamed response is complete
 
             assistant_message = "".join(assistant_response_parts)
             

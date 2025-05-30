@@ -4,22 +4,32 @@ import base64
 from typing import Dict, Any, List, Union
 import httpx
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# OpenAI client singleton
-_client = None
+# OpenAI client singletons
+_sync_client = None
+_async_client = None
 
-def get_client() -> OpenAI:
-    """Get or create the OpenAI client singleton."""
-    global _client
-    if _client is None:
+def get_openai_client() -> OpenAI:
+    """Get or create the synchronous OpenAI client singleton."""
+    global _sync_client
+    if _sync_client is None:
         # Explicitly disable environment proxies for httpx client
         custom_httpx_client = httpx.Client(trust_env=False)
-        _client = OpenAI(http_client=custom_httpx_client)
-    return _client
+        _sync_client = OpenAI(http_client=custom_httpx_client)
+    return _sync_client
+
+def get_async_openai_client() -> AsyncOpenAI:
+    """Get or create the asynchronous OpenAI client singleton."""
+    global _async_client
+    if _async_client is None:
+        # For AsyncOpenAI, httpx.AsyncClient should be used if customizing transport
+        custom_async_httpx_client = httpx.AsyncClient(trust_env=False)
+        _async_client = AsyncOpenAI(http_client=custom_async_httpx_client)
+    return _async_client
 
 def encode_image(image_path: str) -> str:
     """Encode image to base64 string."""
