@@ -26,9 +26,10 @@ CREDENTIALS_PATH = Path(__file__).resolve().parent.parent / "credentials.json" #
 # We are using GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from .env for more flexibility.
 # The _get_credentials method will be adapted to use these .env variables instead of a static credentials.json file if it's not found.
 
-EMAIL_SYSTEM_PROMPT = """You are an AI assistant that helps manage Gmail. You can check for new emails, summarize them, and help draft replies. 
+EMAIL_SYSTEM_PROMPT = """You are an AI assistant that helps manage Gmail. You can check for new emails, summarize them, send emails, and search for specific emails in the user's inbox.
 When asked to check emails, provide a concise summary of new unread messages.
-When asked to send an email, confirm the recipient, subject, and body before proceeding.
+When asked to send an email, confirm the recipient, subject, and body before proceeding. If the subject is missing, try to generate one from the body.
+When asked to search for emails, use the provided keywords to search the user's entire mailbox and summarize the findings.
 Be clear and helpful.
 """
 
@@ -179,6 +180,66 @@ Your conversational summary:"""
             debug_print(f'EmailAgent: An unexpected error occurred while checking emails: {e}')
             return f"Sorry, an unexpected error occurred while I was checking your emails: {e}"
 
+    async def search_specific_emails(self, search_query_string: str, max_results=3) -> str:
+        await self._ensure_service()
+        if not self.service:
+            return "EmailAgent: Gmail service is not available. Cannot search emails."
+        try:
+            debug_print(f"EmailAgent: Searching for emails matching: '{search_query_string}', max_results={max_results}")
+            results = self.service.users().messages().list(userId='me', q=search_query_string, maxResults=max_results).execute()
+            messages = results.get('messages', [])
+
+            if not messages:
+                return f"I couldn't find any emails matching your search for '{search_query_string}'."
+
+            email_details_for_summary = []
+            for msg_ref in messages:
+                # Fetch full message to get snippet and headers correctly for general search
+                msg = self.service.users().messages().get(userId='me', id=msg_ref['id']).execute()
+                payload = msg.get('payload', {})
+                headers = payload.get('headers', [])
+                subject = "[No Subject]"
+                sender = "[Unknown Sender]"
+                date = "[Unknown Date]"
+                for header in headers:
+                    if header['name'].lower() == 'subject':
+                        subject = header['value']
+                    if header['name'].lower() == 'from':
+                        sender = header['value']
+                    if header['name'].lower() == 'date':
+                        date = header['value']
+                
+                snippet = msg.get('snippet', '[No snippet available]')
+                email_details_for_summary.append(f"Email from: {sender}\nDate: {date}\nSubject: {subject}\nSnippet: {snippet}\n---")
+            
+            if not email_details_for_summary:
+                return f"I found some references but couldn't retrieve details for emails matching '{search_query_string}'."
+
+            emails_text = "\n\n".join(email_details_for_summary)
+            summary_prompt = f"""You are an assistant who has just searched the user's email inbox based on their query. 
+Based on the following email information, provide a concise and conversational summary of the messages found. 
+Do not just list them. Synthesize the information and tell the user what you found in a friendly, helpful tone. 
+
+Search query was: '{search_query_string}'
+Here are the email details found:
+{emails_text}
+
+Your conversational summary of the search results:"""
+
+            original_system_prompt = self.system_prompt
+            self.system_prompt = "You are a helpful assistant summarizing email search results."
+            conversational_summary = await super().process(summary_prompt)
+            self.system_prompt = original_system_prompt
+            
+            return conversational_summary
+
+        except HttpError as error:
+            debug_print(f'EmailAgent: An API error occurred while searching emails: {error}')
+            return f"I encountered an API error while trying to search your emails for '{search_query_string}': {error}"
+        except Exception as e:
+            debug_print(f'EmailAgent: An unexpected error occurred while searching emails: {e}')
+            return f"Sorry, an unexpected error occurred while I was searching your emails for '{search_query_string}': {e}"
+
     async def send_email(self, to: str, subject: str, body_text: str) -> str:
         # Before calling this, ensure SCOPES include gmail.send or similar
         # For now, this will likely fail if only gmail.readonly is used.
@@ -216,7 +277,7 @@ Your conversational summary:"""
 
         # LLM call to determine intent and extract parameters
         intent_prompt = f"""You are an email processing AI. Given the user's query, determine the action they want to perform and extract any relevant parameters.
-Possible actions are: 'check_new_emails', 'send_email', 'answer_query_about_emails_generally'.
+Possible actions are: 'check_new_emails', 'send_email', 'search_specific_emails', 'answer_query_about_emails_generally'.
 
 If 'check_new_emails':
 - Parameters: 'max_results' (integer, default to 5 if not specified or if a general request like 'check emails' is made. Look for numbers in phrases like 'last 3 emails', 'top 10 emails').
@@ -224,13 +285,17 @@ If 'check_new_emails':
 If 'send_email':
 - Parameters: 'to' (string, recipient email), 'subject' (string), 'body' (string).
 
+If 'search_specific_emails':
+- Parameters: 'search_terms' (string, the keywords or phrases the user wants to search for in their emails. Extract this from queries like 'find emails about X', 'what was that email about Y', 'search for messages from Z concerning A').
+
 If the query is a general question about email functionality, how to use the email agent, or something that doesn't fit other actions, choose 'answer_query_about_emails_generally' and the original query will be used for a general LLM response.
 
 User Query: "{query}"
 
 Respond ONLY with a JSON object containing 'action' (string) and 'parameters' (an object). Include all extracted parameters. If a parameter for an action is not found in the query, do not include it in the parameters object unless a default is specified (like max_results).
 Example for 'check my 3 new emails': {{"action": "check_new_emails", "parameters": {{"max_results": 3}}}}
-Example for 'check emails': {{"action": "check_new_emails", "parameters": {{"max_results": 5}}}}
+Example for 'search for emails about project phoenix': {{"action": "search_specific_emails", "parameters": {{"search_terms": "project phoenix"}}}}
+Example for 'what was that email from jane about the budget?': {{"action": "search_specific_emails", "parameters": {{"search_terms": "from:jane budget"}}}}
 Example for 'send an email to foo@bar.com subject hello body hi there': {{"action": "send_email", "parameters": {{"to": "foo@bar.com", "subject": "hello", "body": "hi there"}}}}
 Example for 'how do I use you for email?': {{"action": "answer_query_about_emails_generally", "parameters": {{}}}}
 """
@@ -257,6 +322,13 @@ Example for 'how do I use you for email?': {{"action": "answer_query_about_email
                     max_results = 5 
                     debug_print(f"EmailAgent: Invalid max_results from LLM, defaulting to 5.")
                 return await self.check_new_emails(max_results=max_results)
+            
+            elif action == "search_specific_emails":
+                search_terms = parameters.get("search_terms")
+                if search_terms:
+                    return await self.search_specific_emails(search_query_string=search_terms)
+                else:
+                    return "You asked me to search for emails, but didn't provide any search terms. What would you like me to look for?"
             
             elif action == "send_email":
                 recipient = parameters.get("to")
