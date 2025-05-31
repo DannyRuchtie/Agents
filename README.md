@@ -195,15 +195,6 @@ Provides weather forecasts using the OpenWeatherMap API.
 
 *(More detailed sections for other agents can be added here as needed.)*
 
-## 🎢 Future Roadmap (Conceptual)
-
-This project is continuously evolving. Potential future enhancements include:
--   [ ] More sophisticated long-term memory and learning for agents.
--   [ ] Support for more local multi-modal models with Ollama for vision tasks.
--   [ ] Expanded capabilities for the Email Agent (e.g., sending emails, summarizing threads).
--   [ ] Interactive agent configuration via the chat interface.
--   [ ] More granular control over individual agent personalities or verbosity.
--   [ ] GUI for easier interaction and management (alternative to CLI).
 
 ## 🤝 Contributing
 
