@@ -65,6 +65,7 @@ LLM_PROVIDER_SETTINGS = {
     "default_provider": "ollama",  # "openai" or "ollama"
     "ollama_base_url": "http://localhost:11434",
     "ollama_default_model": "gemma3:4b-it-q4_K_M", # User specified model
+    "ollama_default_vision_model": "gemma3:4b-it-q4_K_M", # Updated: Use gemma3:4b for vision
     "openai_default_model": "gpt-4.1-nano-2025-04-14" # Updated OpenAI default model
 }
 

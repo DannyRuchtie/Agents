@@ -2,6 +2,8 @@ import asyncio
 import sys
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, AsyncGenerator
+import json
+import httpx
 
 # from config.openai_config import get_client as get_openai_client # Removed
 from config.openai_config import get_async_openai_client
@@ -91,59 +93,105 @@ class OllamaLLMProvider(BaseLLMProvider):
         messages: List[Dict[str, Any]],
         config: Dict[str, Any]
     ) -> AsyncGenerator[str, None]:
-        model_name = config.get("model", LLM_PROVIDER_SETTINGS.get("ollama_default_model"))
+        """Stream chat completion from Ollama, supporting multimodal if image data is present."""
+        model_name = config.get("model") or LLM_PROVIDER_SETTINGS.get("ollama_default_model")
         
-        # Ollama's API takes options within a separate 'options' dictionary
-        ollama_options = {
-            key: config[key] for key in ["temperature", "seed", "num_predict", "top_k", "top_p"] if key in config
-            # 'max_tokens' for OpenAI is 'num_predict' for Ollama. Add more mappings as needed.
-        }
-        if "max_tokens" in config: # Mapping max_tokens to num_predict
-             ollama_options["num_predict"] = config["max_tokens"]
+        processed_messages = []
+        image_data_b64_list = [] # To store base64 image strings for Ollama
 
-
-        # Prepare messages for Ollama: it expects 'role' and 'content'.
-        # Also, ensure image_url content is handled correctly if we extend this for vision with Ollama.
-        # For now, assuming text messages.
-        ollama_messages = []
+        # Check messages for image content (as structured by VisionAgent for OpenAI)
+        # and reformat for Ollama
+        is_vision_request = False
         for msg in messages:
-            if msg.get("role") == "system" and not msg.get("content"): # Skip empty system prompts
-                continue
-            
-            # Ollama expects string content. If content is a list (e.g. for OpenAI vision),
-            # we need to adapt it. For now, assuming simple text content based on BaseAgent.
-            # If BaseAgent sends complex content, this part needs more robust handling.
-            content = msg.get("content")
-            if isinstance(content, list):
-                # Attempt to extract text part for Ollama, or join text parts.
-                # This is a simplification. For multi-modal with Ollama, more sophisticated handling is needed.
-                text_parts = [item.get("text") for item in content if isinstance(item, dict) and item.get("type") == "text"]
-                processed_content = " ".join(filter(None, text_parts))
-                if not processed_content: # Fallback if no text parts found, maybe take first item if string?
-                    debug_print(f"Warning: Complex message content for Ollama, could not extract simple text: {content}")
-                    processed_content = str(content) # Fallback, might not be ideal
+            if msg["role"] == "user" and isinstance(msg["content"], list):
+                text_content_parts = []
+                for content_item in msg["content"]:
+                    if content_item["type"] == "text":
+                        text_content_parts.append(content_item["text"])
+                    elif content_item["type"] == "image_url":
+                        image_url_data = content_item["image_url"]["url"]
+                        # Expected format: "data:[<mediatype>];base64,<data>"
+                        if image_url_data.startswith("data:image/") and ";base64," in image_url_data:
+                            base64_image_data = image_url_data.split(";base64,", 1)[1]
+                            image_data_b64_list.append(base64_image_data)
+                            is_vision_request = True
+                
+                # Consolidate text parts for this message
+                full_text_content = "\n".join(text_content_parts)
+                if full_text_content or image_data_b64_list: # Add message if there's text or image
+                    processed_messages.append({"role": msg["role"], "content": full_text_content})
+
+            elif isinstance(msg["content"], str): # Standard text message
+                processed_messages.append({"role": msg["role"], "content": msg["content"]})
             else:
-                processed_content = content
+                # Fallback for unexpected message structure, treat as text if possible
+                try:
+                    processed_messages.append({"role": msg["role"], "content": str(msg["content"])})
+                except Exception:
+                    debug_print(f"OllamaProvider: Could not process complex message content: {msg['content']}")
+                    processed_messages.append({"role": msg["role"], "content": "[Unsupported content format]"})
 
-            ollama_messages.append({"role": msg.get("role"), "content": processed_content})
+
+        if is_vision_request:
+            # Override model_name if it's a vision request and a specific vision model is set
+            vision_model_override = LLM_PROVIDER_SETTINGS.get("ollama_default_vision_model")
+            if vision_model_override:
+                model_name = vision_model_override
+            debug_print(f"OllamaProvider: Vision request detected. Using model: {model_name}. Images: {len(image_data_b64_list)}")
+            # Add the images to the last user message for Ollama
+            if processed_messages and image_data_b64_list:
+                # Find the last user message to append images to, or the first message if no user role.
+                # This assumes VisionAgent's structure where image and prompt are in the same user message.
+                target_message_idx = -1
+                for i in range(len(processed_messages) -1, -1, -1):
+                    if processed_messages[i]["role"] == "user":
+                        target_message_idx = i
+                        break
+                if target_message_idx != -1:
+                     processed_messages[target_message_idx]["images"] = image_data_b64_list
+                else: # If no user message (unlikely for vision), add to first message
+                    if processed_messages:
+                         processed_messages[0]["images"] = image_data_b64_list
+                    else: # No messages to attach to, this is an error state
+                        debug_print("OllamaProvider: Error: No messages to attach image data to.")
+                        yield "Error: Could not process vision request due to message formatting issues."
+                        return
 
 
-        debug_print(f"OllamaLLMProvider: Streaming chat completion for model '{model_name}' with options: {ollama_options} and messages: {ollama_messages}")
-        
-        stream_kwargs = {"model": model_name, "messages": ollama_messages}
-        if ollama_options:
-            stream_kwargs["options"] = ollama_options
-            
+        if not model_name:
+            yield "Error: Ollama model not configured."
+            return
+
+        debug_print(f"OllamaProvider: Streaming chat completion with model: {model_name}, messages: {json.dumps(processed_messages, indent=2)}")
+
         try:
-            async for part in await self.client.chat(**stream_kwargs, stream=True):
-                content = part.get("message", {}).get("content")
-                if content:
-                    yield content
-        except Exception as e:
-            # Log the error and yield an error message or re-raise
-            error_msg = f"Ollama API error: {str(e)}"
+            async for part in await self.client.chat(
+                model=model_name,
+                messages=processed_messages,
+                stream=True,
+                options={
+                    "temperature": config.get("temperature", LLM_PROVIDER_SETTINGS.get("ollama_default_temperature", 0.7)),
+                    "num_predict": config.get("max_tokens", LLM_PROVIDER_SETTINGS.get("ollama_default_max_tokens", 4096))
+                }
+            ):
+                if 'message' in part and 'content' in part['message']:
+                    yield part['message']['content']
+                if part.get('done') and part.get('error'):
+                    debug_print(f"Ollama API error during streaming: {part['error']}")
+                    yield f"\n[Ollama API Error: {part['error']}]"
+                    break
+        except httpx.ConnectError as e:
+            error_msg = f"Ollama connection error: Could not connect to Ollama at {LLM_PROVIDER_SETTINGS.get('ollama_base_url')}. Ensure Ollama is running. Details: {e}"
             debug_print(error_msg)
-            yield error_msg # Or handle more gracefully
+            yield f"\n[Error: {error_msg}]"
+        except ollama.ResponseError as e:
+            error_msg = f"Ollama API error: {e.error} (status code: {e.status_code}). Check if model '{model_name}' is available in Ollama and supports the request."
+            debug_print(error_msg)
+            yield f"\n[Ollama API Error: {error_msg}]"
+        except Exception as e:
+            error_msg = f"Unexpected error in OllamaProvider: {type(e).__name__} - {e}"
+            debug_print(error_msg)
+            yield f"\n[Error: {error_msg}]"
 
 
 def get_llm_provider() -> BaseLLMProvider:
