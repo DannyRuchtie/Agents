@@ -26,9 +26,14 @@ Built with flexibility in mind, you can choose to power its intelligence with cu
         -   A Google Programmable Search Engine ID.
     -   **For Weather Agent:**
         -   An OpenWeatherMap API Key.
--   **For Ollama (Local LLM Option):**
-    -   Ollama installed and running. Download from [ollama.com](https://ollama.com/).
-    -   At least one model pulled, e.g., `ollama pull gemma3:4b-it-q4_K_M` (or your preferred model).
+    -   **For Local Speech-to-Text (STT) with Whisper:**
+        -   `ffmpeg` installed on your system. This is required by Whisper for audio processing.
+            -   On macOS (using Homebrew): `brew install ffmpeg`
+            -   On Ubuntu/Debian: `sudo apt update && sudo apt install ffmpeg`
+            -   On Windows (using Chocolatey): `choco install ffmpeg`
+    -   **For Wake Word Detection (Optional, with STT):**
+        -   A Picovoice AccessKey: Sign up at [Picovoice Console](https://console.picovoice.ai/) to get your free AccessKey. This key needs to be set in your `.env` file as `PICOVOICE_ACCESS_KEY`.
+        -   (Optional) Custom Wake Word `.ppn` files: If you train custom wake words on the Picovoice Console, you'll need to download the `.ppn` model file(s) and specify their paths in `config/settings.json` (under `VOICE_SETTINGS["picovoice_keyword_paths"]`). The project can be configured to use built-in keywords too (e.g., "Porcupine", "Alexa").
 -   **macOS Specifics (for Camera/Screen Agents):** You may need to grant your terminal/Python application permission to access the camera and screen recording in `System Settings > Privacy & Security`.
 
 ### Installation
@@ -72,6 +77,9 @@ Built with flexibility in mind, you can choose to power its intelligence with cu
 
     # For Weather Agent (OpenWeatherMap)
     OPENWEATHERMAP_API_KEY="your_openweathermap_api_key_here"
+    
+    # For Picovoice Wake Word Detection (Optional)
+    PICOVOICE_ACCESS_KEY="your_picovoice_access_key_here"
     ```
     **Important**: Never commit your `.env` file to version control. The `.gitignore` file should already be configured to ignore it.
 
@@ -120,6 +128,20 @@ You'll see a welcome message and a `You:` prompt.
     -   Voice output is **disabled by default**.
     -   You can toggle it using commands like `voice on` / `voice off` (if implemented and recognized in `main.py`).
     -   The default TTS provider is OpenAI. Voice preferences (e.g., OpenAI voice model like "alloy", "nova") are set in `config/settings.py` under `VOICE_SETTINGS`.
+-   **Speech Input (STT) - Local Whisper:**
+    -   STT is **disabled by default**.
+    -   Enable with `speech on`.
+    -   Disable with `speech off`.
+    -   Check status with `speech status`.
+    -   Change Whisper model with `speech model <model_name>` (e.g., `speech model base.en`). Models: `tiny.en`, `base.en`, `small.en`, `medium.en`, `large.en` or their multilingual counterparts.
+    -   Use `listen` to activate a one-time voice input. The assistant will listen, transcribe your speech, and then process the transcribed text.
+-   **Wake Word Detection (Picovoice Porcupine):**
+    -   Requires `PICOVOICE_ACCESS_KEY` in your `.env` file (get from [Picovoice Console](https://console.picovoice.ai/)).
+    -   Enable/disable via `"wakeword_enabled": true/false` in `config/settings.json` or `config/settings.py`.
+    -   Configure keywords (e.g., `["porcupine", "alexa"]` or paths to custom `.ppn` files) and sensitivities in settings.
+    -   If `wakeword_enabled` is true in settings, `speech on` will start wake word listening.
+    -   `speech off` will stop wake word listening.
+    -   When a wake word is detected, the assistant will listen for a command for a short period (configurable timeouts) and then process it.
 
 ## 🛠️ Meet the Agents: Your Specialist Team
 

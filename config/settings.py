@@ -132,7 +132,25 @@ VOICE_SETTINGS = {
         "bf_isabella": "British female voice (Isabella)",
         "bm_george": "British male voice (George)",
         "bm_lewis": "British male voice (Lewis)"
-    }
+    },
+    # Speech-to-Text (STT) settings
+    "stt_enabled": False, # STT disabled by default
+    "stt_provider": "whisper", # Currently only whisper is planned
+    "whisper_model": "tiny.en", # Default whisper model (options: tiny, base, small, medium, large, or .en variants)
+    "whisper_device": "cpu", # "cpu" or "cuda" if GPU is available
+    "stt_activation_phrase": "listening", # Optional: a phrase to say to trigger STT input temporarily
+    "stt_silence_timeout": 2, # Seconds of silence before STT stops listening (if continuous listening is implemented)
+    "stt_phrase_time_limit": 10, # Max seconds for a single voice command (if continuous listening is implemented)
+    
+    # Wake Word (Picovoice Porcupine) Settings
+    "wakeword_enabled": True, # Wake word detection disabled by default
+    "picovoice_access_key": None, # Must be set in .env as PICOVOICE_ACCESS_KEY or directly here for testing
+    # List of built-in keywords (e.g., ['porcupine', 'alexa', 'computer']) or paths to .ppn files
+    "picovoice_keywords": ["porcupine"], # Default to built-in "porcupine"
+    "picovoice_keyword_paths": [], # e.g. ["/path/to/custom_keyword.ppn"]
+    "picovoice_sensitivities": [0.5], # List of sensitivities (0.0-1.0) for each keyword
+    "wakeword_post_silence_timeout": 3, # Seconds of silence after wake word to stop listening for command
+    "wakeword_post_phrase_time_limit": 7 # Max seconds for command after wake word detected
 }
 
 # System settings
@@ -181,6 +199,11 @@ def load_settings():
             VOICE_SETTINGS.update(settings.get("voice_settings", {}))
             SYSTEM_SETTINGS.update(settings.get("system_settings", {}))
             
+            # Load sensitive keys from environment if not set directly in loaded JSON (for safety)
+            # This allows .env to override or provide keys if they are missing from settings.json
+            if VOICE_SETTINGS.get("picovoice_access_key") is None:
+                VOICE_SETTINGS["picovoice_access_key"] = os.getenv("PICOVOICE_ACCESS_KEY")
+
             debug_print("Settings loaded successfully")
         except Exception as e:
             debug_print(f"Error loading settings: {str(e)}")
