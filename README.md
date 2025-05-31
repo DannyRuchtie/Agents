@@ -55,8 +55,8 @@ Our assistant coordinates a team of specialized agents:
 
 1.  **Clone the Repository:**
     ```bash
-    git clone <your-repository-url>
-    cd <repository-directory>
+    git clone https://github.com/DannyRuchtie/Agents
+ 
     ```
 
 2.  **Create and Activate a Virtual Environment:**

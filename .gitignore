@@ -52,3 +52,12 @@ build/
 *.tmp
 /models
 whereami_tool/
+
+# ChromaDB
+chroma.sqlite3
+*.chroma.sqlite3
+chroma-collections.parquet
+chroma-embeddings.parquet
+
+# User-specific data / Cache
+agent_memory.json
