@@ -20,9 +20,14 @@ class TimeAgent(BaseAgent):
         debug_print(f"TimeAgent processing query: {query}")
         now = datetime.datetime.now()
         # Example: Tuesday, May 28, 2024 at 09:30 PM
-        formatted_time = now.strftime("%A, %B %d, %Y at %I:%M %p") 
+        formatted_time = now.strftime("%A, %B %d, %Y at %I:%M %p")
         
-        response = f"The current date and time is {formatted_time}."
+        # More conversational response
+        response = f"Sure! The current date and time is {formatted_time}."
         debug_print(f"TimeAgent response: {response}")
-        print(response) # Print the response for streaming-like behavior
+        # For agents that are meant to have their output spoken or directly presented by MasterAgent,
+        # a direct print here might be redundant if MasterAgent handles the final output.
+        # However, for simple agents, it can simulate the streaming/immediate feel.
+        # Let MasterAgent decide on final printing/streaming.
+        # print(response) 
         return response 

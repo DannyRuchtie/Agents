@@ -6,6 +6,35 @@ from config.settings import debug_print
 from agents.vision_agent import VisionAgent # Import VisionAgent
 
 class CameraAgent:
+    """
+    Agent for capturing images using the webcam and describing them via VisionAgent.
+
+    Core Functionality:
+    When invoked (typically by MasterAgent based on user queries like "can you see me?"
+    or "take a picture"), this agent:
+    1. Captures an image from the default webcam.
+    2. Passes this captured image to an instance of VisionAgent for analysis and description.
+    3. Returns the description.
+
+    It does not use an LLM for its own decision-making but orchestrates hardware
+    interaction (camera) and delegates the AI analysis task.
+
+    Tools:
+        - process(query: str) -> str:
+            Orchestrates the capture and description process.
+            Returns a string containing the image description or an error message.
+            Internally uses:
+                - capture_image(): To get an image from the webcam.
+                - VisionAgent.analyze_image(): To get a description of the captured image.
+
+    Internal Methods:
+        - capture_image(camera_index=0) -> Optional[str]:
+            Accesses the webcam, captures a frame, and saves it to a temporary file.
+            Returns the path to the temporary image file or None on failure.
+        - describe_image(image_path: str, query: str) -> str:
+            Uses the injected VisionAgent instance to analyze the image at image_path
+            with the given query. Handles cleanup of the temporary image.
+    """
     def __init__(self, vision_agent: VisionAgent): # Accept VisionAgent instance
         """
         Initializes the CameraAgent.
@@ -101,7 +130,8 @@ class CameraAgent:
         if image_path:
             # Pass the responsibility of deleting image_path to describe_image (via finally block)
             description = await self.describe_image(image_path)
-            return f"I've looked at the camera. {description}"
+            # MasterAgent can add the conversational lead-in. CameraAgent provides the core finding.
+            return description 
         else:
             return "I couldn't access the camera. Please check if it's connected and not in use by another application, or if I have the necessary permissions."
 

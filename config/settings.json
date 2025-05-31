@@ -58,7 +58,7 @@
     }
   },
   "llm_provider_settings": {
-    "default_provider": "ollama",
+    "default_provider": "openai",
     "ollama_base_url": "http://localhost:11434",
     "ollama_default_model": "gemma3:4b-it-q4_K_M",
     "ollama_default_vision_model": "gemma3:4b-it-q4_K_M",

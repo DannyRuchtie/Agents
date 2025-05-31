@@ -1,86 +1,86 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
 import os
-from pathlib import Path
-from dotenv import load_dotenv
 
-# from agents.master_agent import MasterAgent # We'll uncomment and use this soon
-# from config.paths_config import ensure_directories # We might need this
-# from config.settings import debug_print # For consistency in debugging
+# --- Assumption: MasterAgent is in an 'agents' directory ---
+# Ensure this path is correct relative to where you run this FastAPI app.
+try:
+    from agents.master_agent import MasterAgent
+    # If MasterAgent's __init__ or other parts need async setup, that needs to be handled.
+    # For now, assuming synchronous instantiation and async process method.
+except ImportError:
+    print("ERROR: Could not import MasterAgent. Please ensure 'agents.master_agent' is correct.")
+    print("Using a DUMMY MasterAgent for now to allow the API to start.")
+    # Fallback DUMMY MasterAgent if the real one is not found
+    class MasterAgent:
+        def __init__(self):
+            print("DUMMY MasterAgent initialized.")
+        async def process(self, message: str) -> str:
+            print(f"DUMMY MasterAgent received: {message}")
+            return f"This is a dummy MasterAgent response to: {message}"
 
-app = Flask(__name__)
+app = FastAPI(
+    title="Master Agent API",
+    description="API to interact with the MasterAgent for processing messages.",
+    version="1.0.0"
+)
 
-# --- Configuration Loading ---
-def load_app_config():
-    """Loads .env configuration."""
-    # Construct an absolute path to the .env file relative to this script's location
-    # Assuming api.py is in the project root, same as main.py where .env is expected
-    script_dir = Path(__file__).resolve().parent
-    env_path = script_dir / ".env"
-    
-    print(f"[API_DEBUG] Attempting to load .env file from: {env_path}")
-    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=True)
-    print(f"[API_DEBUG] load_dotenv successful: {loaded_successfully}")
-    
-    # ensure_directories() # Call this if your agents create files/logs
+# --- MasterAgent Instance ---
+# Initialize MasterAgent. If it has complex async setup,
+# FastAPI's lifespan events (startup/shutdown) might be needed.
+# For now, a simple instantiation.
+master_agent_instance = MasterAgent()
 
-load_app_config()
-# master_agent_instance = MasterAgent() # Initialize once if appropriate, or per request
+# --- Pydantic Models for Request and Response ---
+class ProcessMessageRequest(BaseModel):
+    message: str
 
-@app.route('/chat', methods=['POST'])
-async def chat():
-    data = request.get_json()
-    if not data or 'message' not in data:
-        return jsonify({"error": "Missing 'message' in request body"}), 400
+class ProcessMessageResponse(BaseModel):
+    response: str
 
-    user_message = data['message']
-    
-    # ---- Placeholder for MasterAgent integration ----
-    # print(f"[API_DEBUG] Received message: {user_message}")
-    # # For now, we'll just echo. Later, this will call master_agent.process()
-    # # response_from_agent = await master_agent_instance.process(user_message)
-    # response_from_agent = f"API received: {user_message}" # Replace with actual agent call
-    # print(f"[API_DEBUG] Response from agent: {response_from_agent}")
-    # return jsonify({"response": response_from_agent})
-    # ---- End Placeholder ----
+# --- API Endpoints ---
+@app.post("/process-message", response_model=ProcessMessageResponse)
+async def process_message_endpoint(request: ProcessMessageRequest):
+    """
+    Receives a user message, processes it with MasterAgent, 
+    and returns the agent's response.
+    """
+    if not request.message:
+        raise HTTPException(status_code=400, detail="Missing 'message' in request body")
 
-    # For now, let's just simulate a response until MasterAgent is fully integrated
-    # This part will be replaced by the actual call to MasterAgent
-    print(f"[API_DEBUG] Received message for API: {user_message}")
-    
-    # Simulate agent processing for now.
-    # We will need to properly integrate the async MasterAgent.process call.
-    # Flask by default is not async for route handlers, so we'll need to address that.
-    # For a quick start, let's assume MasterAgent can be called in a blocking way for now,
-    # or we use `asyncio.run()` if `MasterAgent.process` is async.
-    
-    # This is a temporary synchronous placeholder.
-    # We'll need to correctly call the async `master_agent.process`
+    print(f"[FastAPI /process-message] Received message: '{request.message}'")
     try:
-        # ---- TEMPORARY: Direct MasterAgent Usage ----
-        # This is a simplified integration. Proper async handling with Flask needs care.
-        from agents.master_agent import MasterAgent # Local import for now
-        # from config.paths_config import ensure_directories
-        # ensure_directories() # Ensure this is called
-
-        # Each request could get a new agent, or use a shared one (consider thread-safety/state)
-        current_master_agent = MasterAgent()
-        # The MasterAgent.process is async, Flask routes are sync by default.
-        # We need to run the async function in an event loop.
-        # A simple way for now, but for production, consider an ASGI server like Uvicorn with Flask.
-        import asyncio
-        agent_response = await current_master_agent.process(user_message)
-        
-        print(f"[API_DEBUG] MasterAgent response: {agent_response}")
-        return jsonify({"response": agent_response})
+        # Assuming MasterAgent.process is an async method as in the original Flask app
+        agent_response = await master_agent_instance.process(request.message)
+        print(f"[FastAPI /process-message] MasterAgent responded: '{agent_response}'")
+        return ProcessMessageResponse(response=agent_response)
     except Exception as e:
-        print(f"[API_ERROR] Error processing message with MasterAgent: {str(e)}")
-        return jsonify({"error": f"Error processing message: {str(e)}"}), 500
+        # Log the full error for debugging on the server
+        print(f"[FastAPI ERROR] Error processing message with MasterAgent: {str(e)}")
+        # Consider logging the full traceback here in a real application
+        # import traceback
+        # print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Error processing message with MasterAgent: {str(e)}")
 
-@app.route('/status', methods=['GET'])
-def status():
-    return jsonify({"status": "API is running"}), 200
+@app.get("/status")
+async def get_status():
+    """Basic status endpoint to check if the API is running."""
+    return {"status": "Master Agent API is running"}
 
-if __name__ == '__main__':
-    # Ensure Flask runs on an accessible IP (0.0.0.0) and a chosen port
-    # Debug mode is useful for development
-    app.run(host='0.0.0.0', port=5001, debug=True) 
+# --- How to Run This FastAPI Application (on Machine A) ---
+# 1. Save this file as `api.py` (or your preferred name for the API server).
+# 2. Ensure you have `fastapi` and `uvicorn` installed:
+#    `pip install fastapi "uvicorn[standard]"`
+# 3. Run from your terminal (in the directory containing this file):
+#    `uvicorn api:app --host 0.0.0.0 --port 5001 --reload`
+#    Replace `api` with the Python filename if you named it differently.
+#    The `--host 0.0.0.0` makes it accessible on your network.
+#    The `--port 5001` is an example; use any available port.
+#    The `--reload` flag is useful for development as it restarts the server on code changes.
+
+if __name__ == "__main__":
+    # This block allows running with `python api.py` for simple testing,
+    # but `uvicorn` is recommended for production or more control.
+    print("Attempting to run with Uvicorn directly. For production, use the uvicorn command.")
+    uvicorn.run(app, host="0.0.0.0", port=5001) 

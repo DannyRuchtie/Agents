@@ -281,20 +281,26 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
 
         routing_prompt_addition = f"""
 {history_context_for_routing}Given the current user query: '{query}'
-And the available specialized agents/actions (carefully consider their descriptions):
+And the available specialized agents/actions (carefully consider their descriptions and the user's exact wording):
 {agent_options_str}
 
 Which agent or action is best suited to handle this query? 
-- If the query is general conversation, or if you can answer it directly with your existing knowledge and personality as the master assistant, respond with 'ROUTE: master'.
-- If the query is a direct follow-up to the 'Assistant replied' context above and can be answered from that, respond with 'ROUTE: master'.
-- If the query seems to be asking for the sources, origin, or evidence for information that was likely provided by a search in the 'Assistant replied' context above, respond with 'ROUTE: get_last_sources'.
-- If the query is primarily a mathematical calculation or requires evaluation of a mathematical expression, respond with 'ROUTE: calculator'.
-- If the query relates to managing emails, respond with 'ROUTE: email'.
-- If the query asks to describe the CURRENT LIVE screen (e.g., 'what am I looking at NOW?', 'describe my CURRENT screen') AND does NOT contain an image file path and is not a follow-up to a recently shown image, respond with 'ROUTE: screen'.
-- If the query involves analyzing an image file that has been EXPLICITLY MENTIONED BY PATH or if the query starts with 'Analyze this image:', respond with 'ROUTE: vision'.
-- If the query asks to use the camera, capture an image from the webcam, or describe what the camera sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera'), respond with 'ROUTE: camera'.
-- Otherwise, respond with 'ROUTE: [agent_name]' where [agent_name] is one of the other specialized agents listed above based on their description (e.g., 'ROUTE: search', 'ROUTE: weather').
-Do not add any other text to your response other than the route decision.
+Your primary goal is to determine the *single best* route.
+
+Follow these rules for routing:
+1.  **Relevance Check**: If the query is nonsensical, abusive, clearly off-topic for a helpful AI assistant (e.g., asking for illegal activities, generating hate speech), or so vague that no agent can meaningfully act on it, respond with 'ROUTE: master'. I (MasterAgent) will then handle it with a polite refusal or ask for clarification.
+2.  **Direct MasterAgent Handling**: If the query is general conversation, a simple chat, a direct question I can answer with my existing knowledge and personality, or a direct follow-up to my immediately preceding response (see 'Assistant replied' context), respond with 'ROUTE: master'.
+3.  **Specific Agent Capabilities** (refer to their descriptions for keywords and typical queries):
+    *   'ROUTE: get_last_sources': If the query specifically asks for the sources, origin, or evidence for information I (MasterAgent, likely via SearchAgent) recently provided.
+    *   'ROUTE: calculator': If the query is primarily a mathematical calculation or requires evaluation of a mathematical expression.
+    *   'ROUTE: email': If the query relates to managing emails (checking, sending, searching).
+    *   'ROUTE: vision': Use for queries involving analysis of an image file that has been EXPLICITLY MENTIONED BY ITS FILE PATH (e.g., '/path/to/image.jpg what is this?') or if the query explicitly states 'Analyze this image:' followed by a path. This agent deals with static, already existing image files.
+    *   'ROUTE: camera': Use if the query asks to use the WEBCAM, capture a NEW image using the camera, or describe what the camera currently sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera to look around'). This implies real-time capture.
+    *   'ROUTE: screen': Use if the query asks to describe the user's CURRENT LIVE SCREEN content (e.g., 'what am I looking at NOW?', 'describe my current screen', 'read the text on my active window') AND does NOT contain an image file path. This implies capturing the live display.
+    *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, weather, time, writer, code, scanner, memory, personality, learning) based on its description and the query's intent.
+4.  **Clarity**: If unsure between two specialized agents, briefly re-evaluate if 'ROUTE: master' can handle it. If not, pick the one that seems slightly more aligned.
+
+Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'). Do not add any other text or explanation.
 """
         
         # ANSI escape codes for color
@@ -328,44 +334,120 @@ Do not add any other text to your response other than the route decision.
             # For safety, assume intent was master if no clear route.
             llm_intended_route = "master"
 
-        final_response = ""
-        chosen_agent_for_execution = llm_intended_route # What we will try to execute
-
         print(f"{GRAY}MasterAgent: LLM intended route: '{llm_intended_route}'.{RESET_COLOR}")
 
-        # Now, decide how to act based on llm_intended_route and agent availability
+        # --- Conversational Lead-ins & Execution ---
+        final_response = ""
+        action_performed = False
+
         if llm_intended_route == "master":
-            debug_print(f"MasterAgent handling query directly as 'master' was intended or defaulted: {query}")
-            final_response = await super().process(query)
+            debug_print(f"MasterAgent handling query directly as 'master' was intended: {query}")
+            # For direct handling, we use the MasterAgent's own system prompt and conversation history
+            final_response = await super().process(query) 
+            action_performed = True
+
         elif llm_intended_route == "get_last_sources":
             if "search" in self.agents and hasattr(self.agents["search"], "get_last_retrieved_sources"):
                 final_response = self.agents["search"].get_last_retrieved_sources()
+                # This response is already quite direct, MasterAgent doesn't need to add much.
             else:
-                final_response = "I can't retrieve sources now; the search agent might be unavailable."
+                final_response = "I can't seem to recall the sources from my last search right now."
+            action_performed = True
+        
         elif llm_intended_route in self.agents:
-            # The agent LLM intended is available
+            chosen_agent = self.agents[llm_intended_route]
+            agent_name_friendly = llm_intended_route.replace("_", " ").title()
+            lead_in = ""
+
+            # Specific lead-ins based on agent type
+            if llm_intended_route == "search":
+                lead_in = f"Sure, I'll search the web for '{query}' for you...\n"
+            elif llm_intended_route == "memory": # Memory agent responses are already conversational
+                pass # No specific lead-in, its responses are self-contained
+            elif llm_intended_route == "writer":
+                lead_in = f"Okay, I can help write that for you...\n"
+            elif llm_intended_route == "code":
+                # Code agent's own process method will ask for clarification if needed or generate/explain
+                # Lead-in here might be too early if it needs to clarify first.
+                # Let's assume for now MasterAgent waits for CodeAgent's final output.
+                lead_in = "Working on that code request...\n"
+            elif llm_intended_route == "vision":
+                lead_in = "Let me take a look at that image for you...\n"
+            elif llm_intended_route == "camera":
+                lead_in = "Okay, let me check the camera...\n"
+            elif llm_intended_route == "screen":
+                lead_in = "Alright, let me see what's on your screen...\n"
+            elif llm_intended_route == "calculator":
+                lead_in = f"Let me calculate that: '{query}'...\n"
+            elif llm_intended_route == "time": # Time agent is very direct, lead-in might feel redundant
+                pass # Its response is already like "Sure! The current date and time is..."
+            elif llm_intended_route == "weather":
+                lead_in = f"Let me check the weather for you...\n"
+            elif llm_intended_route == "email":
+                # Email agent has its own conversational flow for classification
+                lead_in = "Looking into your email request...\n"
+            else:
+                lead_in = f"Okay, I'll use my {agent_name_friendly} capabilities for that...\n"
+
+            if lead_in and not (llm_intended_route == "memory" or llm_intended_route == "time") :
+                sys.stdout.write(lead_in)
+                sys.stdout.flush()
+            
             debug_print(f"MasterAgent routing to available agent '{llm_intended_route}' for query: {query}")
-            final_response = await self.agents[llm_intended_route].process(query)
-        else:
-            # LLM intended an agent, but it's not available in self.agents (e.g., init failed, or not a real agent name)
-            debug_print(f"MasterAgent: LLM intended to route to '{llm_intended_route}', but this agent is not available/initialized.")
+            agent_response = await chosen_agent.process(query)
+            action_performed = True
+
+            # Frame the agent's response
+            if llm_intended_route == "search":
+                # Search agent's response is already a summary or list.
+                final_response = agent_response 
+            elif llm_intended_route == "memory":
+                final_response = agent_response # Memory agent's responses are fully conversational
+            elif llm_intended_route == "time":
+                final_response = agent_response # Time agent's responses are fully conversational
+            elif llm_intended_route == "calculator":
+                 # Calculator responses are now like "Alright, the answer is X" or error messages.
+                final_response = agent_response
+            elif llm_intended_route == "vision" or llm_intended_route == "camera" or llm_intended_route == "screen":
+                if agent_response and not agent_response.startswith("Error:") and not agent_response.startswith("I couldn't") and not agent_response.startswith("I hit a snag"):
+                    final_response = f"Here's what I see: {agent_response}"
+                else:
+                    final_response = agent_response # Pass through errors or specific failure messages
+            elif llm_intended_route == "code":
+                 # Code agent returns code blocks or explanations. MasterAgent can frame this.
+                 # For now, let code agent return its full output. Lead-in was minimal.
+                 final_response = agent_response
+            elif llm_intended_route == "email":
+                # Email agent handles its own conversational flow for summaries/errors.
+                final_response = agent_response
+            elif llm_intended_route == "writer":
+                 final_response = agent_response # Writer agent generates text, MasterAgent can just present it.
+            elif llm_intended_route == "weather":
+                # Weather agent now returns a conversational summary. MasterAgent can present it.
+                final_response = agent_response
+            else:
+                # Generic framing for other agents
+                final_response = f"Regarding your request about '{query}', here's what the {agent_name_friendly} module found: {agent_response}"
+        
+        if not action_performed:
+            # This block handles cases where llm_intended_route was not 'master' and not an available agent.
+            debug_print(f"MasterAgent: LLM intended to route to '{llm_intended_route}', but this agent is not available/initialized or action was not performed.")
             # Provide a specific message about the intended agent being unavailable
             if llm_intended_route == "screen":
-                final_response = f"I tried to use the Screen Agent for your query ('{query}'), but it seems to be unavailable. This could be due to a missing dependency (like VisionAgent), a configuration issue, or macOS permissions for screen capture."
+                final_response = f"I tried to use my screen understanding skills for your query ('{query}'), but it seems that part of me is unavailable right now. This could be due to a missing dependency, a configuration issue, or macOS permissions for screen capture."
             elif llm_intended_route == "vision":
-                 final_response = f"I tried to use the Vision Agent for your query ('{query}'), but it seems to be unavailable. Please check its configuration."
+                 final_response = f"I wanted to analyze an image for you ('{query}'), but my vision processing part isn't working. Please check its configuration."
             elif llm_intended_route == "camera":
-                 final_response = f"I tried to use the Camera Agent for your query ('{query}'), but it seems to be unavailable. This could be because the VisionAgent (a dependency) isn't working, the camera is not accessible, or there's a configuration issue. Please check camera permissions and VisionAgent status."
-            # Add more specific fallbacks for other agents if needed
+                 final_response = f"I tried to use my camera for your query ('{query}'), but it's not available. This could be because my vision system (a dependency) isn't working, the camera is not accessible, or there's a configuration issue. Please check camera permissions and my vision system status."
             else:
-                final_response = f"I intended to use an agent called '{llm_intended_route}' for your query ('{query}'), but it's not currently available or recognized. Please check my configuration."
-                # As a last resort, if we absolutely want to try answering, we could call super().process(query)
-                # but it's better to signal the routing/agent availability problem.
-                # For now, let's stick to the error message about the agent.
+                final_response = f"I thought about using a specialized part of my system called '{llm_intended_route}' for your query ('{query}'), but it's not currently available or I don't recognize that capability. How about we try something else?"
+        
+        # Ensure final_response is a string
+        if not isinstance(final_response, str):
+            final_response = str(final_response) # Convert if it's not (e.g. some error type)
 
-        # The print of chosen agent is now more about intent vs actual execution path
-        print(f"{GRAY}MasterAgent: Action based on intent '{llm_intended_route}'. Final response generated.{RESET_COLOR}")
-        print() #Spacing
+        print(f"{GRAY}MasterAgent: Action based on intent '{llm_intended_route}'. Final response being prepared.{RESET_COLOR}")
+        # The actual print to user happens after voice output check
 
         if VOICE_SETTINGS.get("enabled", False) and VOICE_SETTINGS.get("tts_provider") == "openai":
             if final_response:

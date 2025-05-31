@@ -85,7 +85,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             *self.conversation_history
         ]
     
-    async def process(self, input_text: str, messages: Optional[List[Dict[str, str]]] = None, **kwargs: Any) -> str:
+    async def process(self, input_text: str, messages: Optional[List[Dict[str, str]]] = None, system_prompt_override: Optional[str] = None, **kwargs: Any) -> str:
         """Process the input text and return a response."""
         try:
             # Check if this is an image request and we're not already the vision agent
@@ -106,16 +106,32 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             
             # Use provided messages or build from context window
             current_messages: List[Dict[str, str]]
+            
+            # Determine the system prompt to use
+            active_system_prompt = system_prompt_override if system_prompt_override is not None else self.system_prompt
+
             if messages:
                 # For vision messages, use them directly without modification
                 if any(isinstance(msg.get('content'), list) and 
                       any(item.get('type') == 'image_url' for item in msg['content']) 
                       for msg in messages):
-                    current_messages = messages
+                    current_messages = messages # Vision messages might already include a system-like prompt or structure
                 else:
-                    current_messages = [{"role": "system", "content": self.system_prompt}, *messages]
+                    # Prepend the active system prompt to the provided messages
+                    # Ensure not to add duplicate system messages if 'messages' already has one.
+                    if not (messages and messages[0]["role"] == "system"):
+                        current_messages = [{"role": "system", "content": active_system_prompt}] + messages
+                    else:
+                        # If messages[0] is already a system prompt, decide whether to replace or use it.
+                        # For now, let's assume if messages has a system prompt, it's intentional.
+                        # However, system_prompt_override should take precedence.
+                        if system_prompt_override is not None:
+                            messages[0]["content"] = system_prompt_override # Override existing system message
+                        current_messages = messages 
+
             else:
-                current_messages = self.get_context_window()
+                current_messages = [{"role": "system", "content": active_system_prompt}]
+                current_messages.extend(self.conversation_history)
                 current_messages.append({"role": "user", "content": input_text})
             
             # Extract model configuration

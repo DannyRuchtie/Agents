@@ -1,6 +1,7 @@
 """Agent for interacting with Gmail API."""
 import os
 import base64
+import json # For parsing LLM response in process method
 from pathlib import Path
 from email.mime.text import MIMEText
 
@@ -14,26 +15,68 @@ from .base_agent import BaseAgent
 from config.settings import debug_print
 
 # If modifying these SCOPES, delete the token.json file.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"] # Start with read-only
-# For sending: "https://www.googleapis.com/auth/gmail.send"
-# For full access: "https://mail.google.com/"
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.send"]
 
-TOKEN_PATH = Path(__file__).resolve().parent.parent / "token.json" # Store in project root
-CREDENTIALS_PATH = Path(__file__).resolve().parent.parent / "credentials.json" # Expecting downloaded OAuth credentials JSON
+TOKEN_PATH = Path(__file__).resolve().parent.parent / "token.json"
+CREDENTIALS_PATH = Path(__file__).resolve().parent.parent / "credentials.json"
 
-# --- Note on credentials.json vs .env --- 
-# The Google library examples often use a credentials.json file downloaded from Google Cloud.
-# We are using GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET from .env for more flexibility.
-# The _get_credentials method will be adapted to use these .env variables instead of a static credentials.json file if it's not found.
+EMAIL_SYSTEM_PROMPT = """You are an AI assistant that helps manage Gmail. Your primary task is to understand user requests related to email and translate them into actionable commands for the Gmail API.
 
-EMAIL_SYSTEM_PROMPT = """You are an AI assistant that helps manage Gmail. You can check for new emails, summarize them, send emails, and search for specific emails in the user's inbox.
-When asked to check emails, provide a concise summary of new unread messages.
-When asked to send an email, confirm the recipient, subject, and body before proceeding. If the subject is missing, try to generate one from the body.
-When asked to search for emails, use the provided keywords to search the user's entire mailbox and summarize the findings.
-Be clear and helpful.
+When a user asks you to do something with their email, your first step is to determine the specific action: 'check_new', 'search_emails', or 'send_email'.
+
+1.  **Check New Emails ('check_new')**: 
+    *   If the user wants to check for new or unread emails (e.g., "any new emails?", "check my inbox").
+    *   No specific parameters needed beyond the intent itself.
+
+2.  **Search Emails ('search_emails')**:
+    *   If the user wants to find specific emails (e.g., "find emails from John about the project", "search for attachments from last week").
+    *   Extract a 'search_query_string' that can be passed to Gmail's search.
+
+3.  **Send Email ('send_email')**:
+    *   If the user wants to send an email (e.g., "send an email to jane@example.com", "draft a message to support").
+    *   Extract 'to' (recipient's email address), 'subject', and 'body' of the email.
+    *   If the subject is missing, try to infer a suitable one from the body. If the body is very short and the subject unclear, you can ask for clarification on the subject.
+    *   If critical information like the recipient is missing, you must ask for it.
+
+Your response for this initial classification step MUST be a JSON object containing:
+{ "action": "<action_name>", "parameters": { <extracted_parameters_as_key_value_pairs> } }
+
+Example for checking mail: {"action": "check_new", "parameters": {}}
+Example for searching: {"action": "search_emails", "parameters": {"search_query_string": "from:boss subject:urgent"}}
+Example for sending: {"action": "send_email", "parameters": {"to": "friend@example.com", "subject": "Catching up", "body": "Hey, how are you? Let's connect soon."}}
+
+If the request is ambiguous or lacks essential information for an action (e.g., missing recipient for 'send_email'), use {"action": "clarify", "parameters": {"missing_info": "recipient_email", "original_query": "..."}}.
+
+After this classification, the system will then call the appropriate function to interact with Gmail. For 'send_email', the system will separately ask the user for final confirmation before actually sending.
 """
 
 class EmailAgent(BaseAgent):
+    """
+    Agent for managing Gmail interactions, including checking, searching, and sending emails.
+
+    Core Functionality:
+    This agent uses the Gmail API to perform email operations. It requires OAuth2
+    authentication, storing credentials in `token.json` and using client secrets
+    from environment variables (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`).
+
+    The `process(query: str)` method is the main entry point. It uses an LLM to:
+    1. Classify the user's query into an action: 'check_new', 'search_emails', or 'send_email'.
+    2. Extract necessary parameters for that action (e.g., search terms, recipient/subject/body).
+    3. Calls the corresponding internal method to interact with the Gmail API.
+
+    Internal Tools/Methods:
+        - _get_credentials(): Handles Google OAuth2 authentication flow.
+        - _ensure_service(): Initializes the Gmail API service.
+        - check_new_emails(max_results=5): Fetches and summarizes new unread emails using an LLM.
+        - search_specific_emails(search_query_string: str, max_results=3): Searches emails and summarizes results using an LLM.
+        - send_email(to: str, subject: str, body_text: str): Sends an email.
+
+    Setup:
+    - Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env`.
+    - User will be prompted for Google account authorization via a web browser on first use
+      or when `token.json` is invalid/expired.
+    - `SCOPES` define API permissions (currently read and send).
+    """
     def __init__(self):
         super().__init__(
             agent_type="email",
@@ -112,14 +155,13 @@ class EmailAgent(BaseAgent):
             try:
                 creds = self._get_credentials()
                 if not creds:
-                    raise Exception("EmailAgent: Failed to obtain credentials.")
+                    raise Exception("EmailAgent: Failed to obtain credentials. Service not initialized.")
                 self.service = build('gmail', 'v1', credentials=creds)
                 debug_print("EmailAgent: Gmail API service initialized successfully.")
             except Exception as e:
                 debug_print(f"EmailAgent: Failed to initialize Gmail service: {str(e)}")
-                self.service = None # Ensure service is None if init fails
-                # Re-raise or handle as appropriate for the calling method
-                raise
+                self.service = None
+                raise # Re-raise the exception to be handled by the caller
 
     async def check_new_emails(self, max_results=5) -> str:
         await self._ensure_service()
@@ -131,7 +173,7 @@ class EmailAgent(BaseAgent):
             messages = results.get('messages', [])
 
             if not messages:
-                return "You have no new unread emails."
+                return "Looks like your inbox is all clear! No new unread emails right now."
 
             email_details_for_summary = []
             for msg_ref in messages:
@@ -149,7 +191,7 @@ class EmailAgent(BaseAgent):
                 email_details_for_summary.append(f"Email from: {sender}\nSubject: {subject}\nSnippet: {snippet}\n---")
             
             if not email_details_for_summary:
-                return "You have no new unread emails, or I couldn't retrieve their details."
+                return "You have no new unread emails, or I couldn't retrieve their details at the moment."
 
             # Prepare a prompt for the LLM to summarize these emails conversationally
             emails_text = "\n\n".join(email_details_for_summary)
@@ -175,10 +217,10 @@ Your conversational summary:"""
 
         except HttpError as error:
             debug_print(f'EmailAgent: An API error occurred while checking emails: {error}')
-            return f"I encountered an API error while trying to check your emails: {error}"
+            return f"I hit a snag trying to check your emails with Google: {error}"
         except Exception as e:
             debug_print(f'EmailAgent: An unexpected error occurred while checking emails: {e}')
-            return f"Sorry, an unexpected error occurred while I was checking your emails: {e}"
+            return f"Sorry, something unexpected went wrong while I was trying to check your emails: {e}"
 
     async def search_specific_emails(self, search_query_string: str, max_results=3) -> str:
         await self._ensure_service()
@@ -190,7 +232,7 @@ Your conversational summary:"""
             messages = results.get('messages', [])
 
             if not messages:
-                return f"I couldn't find any emails matching your search for '{search_query_string}'."
+                return f"I searched your emails for '{search_query_string}' but couldn't find anything matching that."
 
             email_details_for_summary = []
             for msg_ref in messages:
@@ -213,7 +255,7 @@ Your conversational summary:"""
                 email_details_for_summary.append(f"Email from: {sender}\nDate: {date}\nSubject: {subject}\nSnippet: {snippet}\n---")
             
             if not email_details_for_summary:
-                return f"I found some references but couldn't retrieve details for emails matching '{search_query_string}'."
+                return f"I found some email references for '{search_query_string}', but I couldn't quite fetch their details."
 
             emails_text = "\n\n".join(email_details_for_summary)
             summary_prompt = f"""You are an assistant who has just searched the user's email inbox based on their query. 
@@ -235,183 +277,179 @@ Your conversational summary of the search results:"""
 
         except HttpError as error:
             debug_print(f'EmailAgent: An API error occurred while searching emails: {error}')
-            return f"I encountered an API error while trying to search your emails for '{search_query_string}': {error}"
+            return f"I ran into a Google API issue while searching your emails for '{search_query_string}': {error}"
         except Exception as e:
             debug_print(f'EmailAgent: An unexpected error occurred while searching emails: {e}')
-            return f"Sorry, an unexpected error occurred while I was searching your emails for '{search_query_string}': {e}"
+            return f"Oops, something unexpected happened while I was searching your emails for '{search_query_string}': {e}"
 
     async def send_email(self, to: str, subject: str, body_text: str) -> str:
         # Before calling this, ensure SCOPES include gmail.send or similar
-        # For now, this will likely fail if only gmail.readonly is used.
         if ("https://www.googleapis.com/auth/gmail.send" not in SCOPES and 
             "https://mail.google.com/" not in SCOPES):
-            return "EmailAgent: Cannot send email. Missing required 'send' permissions in SCOPES. Please update SCOPES and re-authenticate (delete token.json)."
+            return "EmailAgent: Cannot send email. Missing required 'send' permissions. Please update SCOPES and re-authenticate (delete token.json)."
 
         await self._ensure_service()
         if not self.service:
             return "EmailAgent: Gmail service is not available. Cannot send email."
+
         try:
             message = MIMEText(body_text)
             message['to'] = to
             message['subject'] = subject
-            encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
-            create_message = {
-                'raw': encoded_message
-            }
-            send_message = self.service.users().messages().send(userId="me", body=create_message).execute()
-            debug_print(f'EmailAgent: Message Id: {send_message["id"]}')
-            return f"Email sent successfully to {to} with subject: {subject}. Message ID: {send_message["id"]}"
+            raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+            send_message_request = {'raw': raw_message}
+
+            sent_message = self.service.users().messages().send(userId='me', body=send_message_request).execute()
+            debug_print(f"EmailAgent: Message sent. Message ID: {sent_message['id']}")
+            return f"Alright, your email to {to} with the subject '{subject}' has been sent!"
         except HttpError as error:
             debug_print(f'EmailAgent: An API error occurred while sending email: {error}')
-            return f"Failed to send email. API error: {error}"
+            return f"I hit a Google API snag while trying to send your email: {error}"
         except Exception as e:
             debug_print(f'EmailAgent: An unexpected error occurred while sending email: {e}')
-            return f"An unexpected error occurred: {e}"
+            return f"Yikes, something unexpected went wrong when I tried to send your email: {e}"
 
     async def process(self, query: str) -> str:
-        await self._ensure_service() # Ensure authenticated and service is ready
-        if not self.service:
-            return "EmailAgent: Gmail service is not available due to authentication or setup issues."
-
-        debug_print(f"EmailAgent attempting to understand user query: {query}")
-
-        # LLM call to determine intent and extract parameters
-        intent_prompt = f"""You are an email processing AI. Given the user's query, determine the action they want to perform and extract any relevant parameters.
-Possible actions are: 'check_new_emails', 'send_email', 'search_specific_emails', 'answer_query_about_emails_generally'.
-
-If 'check_new_emails':
-- Parameters: 'max_results' (integer, default to 5 if not specified or if a general request like 'check emails' is made. Look for numbers in phrases like 'last 3 emails', 'top 10 emails').
-
-If 'send_email':
-- Parameters: 'to' (string, recipient email), 'subject' (string), 'body' (string).
-
-If 'search_specific_emails':
-- Parameters: 'search_terms' (string, the keywords or phrases the user wants to search for in their emails. Extract this from queries like 'find emails about X', 'what was that email about Y', 'search for messages from Z concerning A').
-
-If the query is a general question about email functionality, how to use the email agent, or something that doesn't fit other actions, choose 'answer_query_about_emails_generally' and the original query will be used for a general LLM response.
-
-User Query: "{query}"
-
-Respond ONLY with a JSON object containing 'action' (string) and 'parameters' (an object). Include all extracted parameters. If a parameter for an action is not found in the query, do not include it in the parameters object unless a default is specified (like max_results).
-Example for 'check my 3 new emails': {{"action": "check_new_emails", "parameters": {{"max_results": 3}}}}
-Example for 'search for emails about project phoenix': {{"action": "search_specific_emails", "parameters": {{"search_terms": "project phoenix"}}}}
-Example for 'what was that email from jane about the budget?': {{"action": "search_specific_emails", "parameters": {{"search_terms": "from:jane budget"}}}}
-Example for 'send an email to foo@bar.com subject hello body hi there': {{"action": "send_email", "parameters": {{"to": "foo@bar.com", "subject": "hello", "body": "hi there"}}}}
-Example for 'how do I use you for email?': {{"action": "answer_query_about_emails_generally", "parameters": {{}}}}
-"""
+        debug_print(f"EmailAgent received query: {query}")
         
         try:
-            # Use a different system prompt for this specific intent parsing call, or temporarily override.
-            # For now, we assume super().process() uses the agent's default system_prompt, 
-            # so the intent_prompt needs to be very explicit.
-            # A better way would be for BaseAgent to allow passing a temporary system_prompt.
-            # However, the detailed instructions in intent_prompt should guide the current BaseAgent.process well.
-            parsed_intent_str = await super().process(intent_prompt) # BaseAgent handles LLM call
-            debug_print(f"EmailAgent: LLM intent parsing response: {parsed_intent_str}")
+            # First, ensure service can be initialized. This might trigger OAuth.
+            # Wrapped in try-except in case _get_credentials itself raises an issue that needs user feedback.
+            try:
+                await self._ensure_service() 
+            except Exception as e:
+                debug_print(f"EmailAgent: Initial service check failed: {e}")
+                # Provide a more user-friendly message if auth fails here
+                if "OAuth flow failed" in str(e) or "Failed to obtain credentials" in str(e):
+                    return f"I need to connect to your Google account to manage emails, but something went wrong with the authorization. Please ensure you have enabled the Gmail API in your Google Cloud project and that your GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are correctly set up. Details: {str(e)}"
+                return f"EmailAgent: Could not connect to Gmail service: {str(e)}"
             
-            import json
-            intent_data = json.loads(parsed_intent_str)
-            action = intent_data.get("action")
-            parameters = intent_data.get("parameters", {})
+            if not self.service:
+                 return "EmailAgent: Gmail service could not be initialized. Please check your setup and authentication."
 
-            if action == "check_new_emails":
-                max_results = parameters.get("max_results", 5) # Default to 5 if not specified
-                try: # Ensure max_results is an int
-                    max_results = int(max_results)
-                except ValueError:
-                    max_results = 5 
-                    debug_print(f"EmailAgent: Invalid max_results from LLM, defaulting to 5.")
-                return await self.check_new_emails(max_results=max_results)
-            
-            elif action == "search_specific_emails":
-                search_terms = parameters.get("search_terms")
-                if search_terms:
-                    return await self.search_specific_emails(search_query_string=search_terms)
-                else:
-                    return "You asked me to search for emails, but didn't provide any search terms. What would you like me to look for?"
-            
+            # Use the LLM to classify the query and extract parameters
+            # The system_prompt (EMAIL_SYSTEM_PROMPT) is designed for this classification task
+            raw_classification = await super().process(query) # LLM call for classification
+            debug_print(f"EmailAgent classification response: {raw_classification}")
+
+            classification = json.loads(raw_classification)
+            action = classification.get("action")
+            params = classification.get("parameters", {})
+
+            if action == "check_new":
+                return await self.check_new_emails()
+            elif action == "search_emails":
+                search_query = params.get("search_query_string")
+                if not search_query:
+                    return "Sure, I can search your emails! What exactly are you looking for?"
+                return await self.search_specific_emails(search_query)
             elif action == "send_email":
-                recipient = parameters.get("to")
-                subject = parameters.get("subject")
-                body = parameters.get("body")
+                to = params.get("to")
+                subject = params.get("subject")
+                body = params.get("body")
 
-                # Attempt to generate subject from body if not provided
-                if not subject and body:
-                    debug_print(f"EmailAgent: Subject missing, attempting to generate from body: '{body[:100]}...'")
-                    subject_generation_prompt = (
-                        f"Given the following email body, please generate a concise and relevant subject line (max 10 words).\n"
-                        f"Email Body:\n"
-                        f"---\n"
-                        f"{body}\n"
-                        f"---\n"
-                        f"Generated Subject:"
-                    )
-                    # Temporarily adjust system prompt for this specific task
-                    original_system_prompt = self.system_prompt
-                    self.system_prompt = "You are an AI assistant helping to compose emails by generating subject lines."
-                    generated_subject_str = await super().process(subject_generation_prompt)
-                    self.system_prompt = original_system_prompt # Reset it
-                    
-                    # Clean up the generated subject (LLMs can sometimes add quotes or prefixes)
-                    generated_subject_str = generated_subject_str.strip().removeprefix("Subject:").removeprefix('"').removesuffix('"').strip()
-                    
-                    if generated_subject_str:
-                        subject = generated_subject_str
-                        debug_print(f"EmailAgent: LLM generated subject: '{subject}'")
-                    else:
-                        debug_print("EmailAgent: LLM failed to generate a subject or returned empty.")
-                        # Subject remains None or empty, will be caught by missing_parts check
+                if not to:
+                    return "I can help send that email, but who should I address it to? Please let me know the recipient's email."
+                if not subject and not body: # Or if body is too short to infer subject
+                    return "Okay, I'm ready to send an email. What would you like the subject and body to be?"
+                if not subject: # Try to infer subject if body exists
+                    subject_inference_prompt = f"Given the email body: \n\n'{body}'\n\nSuggest a concise and appropriate subject line for this email. Respond with ONLY the subject line."
+                    original_sys_prompt = self.system_prompt
+                    self.system_prompt = "You are an assistant helping to create email subject lines."
+                    inferred_subject = await super().process(subject_inference_prompt)
+                    self.system_prompt = original_sys_prompt
+                    subject = inferred_subject.strip()
+                    debug_print(f"EmailAgent: Inferred subject: '{subject}'")
+                    if not subject: # If LLM failed to provide a subject
+                         return "I couldn't quite make out a subject for your email. Could you tell me what it should be?"
 
-                # Check for missing parts after potential subject generation
-                missing_parts = []
-                if not recipient: 
-                    missing_parts.append("recipient (to)")
-                elif "@" not in recipient: # Basic check for a valid email format
-                     missing_parts.append("a valid recipient email address (e.g., name@example.com)")
-                if not subject: # Check subject again, in case generation failed or body was also missing
-                    missing_parts.append("subject")
-                if not body: 
-                    missing_parts.append("body")
+                # CONFIRMATION STEP BEFORE SENDING
+                # More conversational lead-in to the confirmation managed by MasterAgent if needed
+                # EmailAgent now focuses on stating what it WILL DO, MasterAgent confirms
+                return await self.send_email(to, subject, body) # Direct send for now
 
-                if not missing_parts:
-                    return await self.send_email(to=recipient, subject=subject, body_text=body)
-                else:
-                    return f"To send an email, I'm missing the following: {', '.join(missing_parts)}. Please provide all details."
-            
-            elif action == "answer_query_about_emails_generally":
-                # Use the agent's default system prompt for a general answer to the original query
-                # This requires BaseAgent to use its self.system_prompt when super().process is called.
-                # We need to call super().process with the *original query* here.
-                debug_print(f"EmailAgent: Handling '{query}' with general email system prompt.")
-                # Re-setting system prompt for this call if BaseAgent doesn't allow temporary override.
-                # This is a bit of a workaround. Ideally BaseAgent().process takes an optional system_prompt.
-                original_system_prompt = self.system_prompt
-                self.system_prompt = EMAIL_SYSTEM_PROMPT # Ensure it's using the email specific one
-                response = await super().process(query) # Pass original query
-                self.system_prompt = original_system_prompt # Reset it
-                return response
+            elif action == "clarify":
+                missing_info = params.get("missing_info", "some details")
+                original_query = params.get("original_query", query)
+                return f"To help with your email request about '{original_query}', I just need a little more info on the following: {missing_info}. Could you fill me in?"
             else:
-                debug_print(f"EmailAgent: Unknown action parsed: {action}. Falling back to general response.")
-                # Fallback for unknown action, use original query and email system prompt
-                original_system_prompt = self.system_prompt
-                self.system_prompt = EMAIL_SYSTEM_PROMPT
-                response = await super().process(query) # Pass original query
-                self.system_prompt = original_system_prompt # Reset it
-                return response
+                debug_print(f"EmailAgent: Unknown action from classification: {action}. Query: {query}")
+                # Fallback to a more general response or re-prompting
+                return "I'm not quite sure how to handle that email request. I can check for new emails, search your inbox, or help you send a message. What would you like to do?"
 
-        except json.JSONDecodeError:
-            debug_print(f"EmailAgent: Failed to parse JSON from LLM for intent: {parsed_intent_str}. Query: {query}")
-            # Fallback to general response using the original query
-            original_system_prompt = self.system_prompt
-            self.system_prompt = EMAIL_SYSTEM_PROMPT
-            response = await super().process(query)
-            self.system_prompt = original_system_prompt # Reset it
-            return response
+        except json.JSONDecodeError as e:
+            debug_print(f"EmailAgent: Failed to parse JSON from LLM: {raw_classification}. Error: {e}")
+            return "I had a little trouble understanding the specifics of your email task. Could you try rephrasing?"
+        except HttpError as e:
+            debug_print(f"EmailAgent: Google API HTTP Error in process(): {e}")
+            error_content = e.content.decode() if e.content else "No details"
+            if e.resp.status == 401:
+                # Specific handling for auth errors like invalid_grant (token expired/revoked)
+                if "invalid_grant" in error_content.lower():
+                    # Attempt to clear the token and ask the user to retry, which should trigger re-auth
+                    if TOKEN_PATH.exists():
+                        try:
+                            TOKEN_PATH.unlink()
+                            debug_print("EmailAgent: Deleted token.json due to invalid_grant error.")
+                        except OSError as ose:
+                            debug_print(f"EmailAgent: Error deleting token.json: {ose}")
+                    return "It seems my authorization with Google needs a refresh. I've cleared the old one. If you try again, I'll guide you through reconnecting!"
+                return f"Hmm, there's an authentication hiccup with Google: {error_content}. Let's make sure I'm properly authorized and your credentials are set."
+            elif e.resp.status == 403:
+                 if "access_denied" in error_content.lower() or "insufficient permissions" in error_content.lower() or "forbidden" in error_content.lower() or "scope" in error_content.lower():
+                    return f"It looks like I don't have the right permissions for that action with your Gmail (Error 403: Forbidden). My current permissions are for: {SCOPES}. If you were trying to send an email or do something similar, I might need broader access. Details: {error_content}"
+                 return f"Google says I'm not allowed to do that with your Gmail account (Error 403: Forbidden). Best to check my permissions. Details: {error_content}"
+            return f"A Google API error popped up: {e.resp.status} - {error_content}. Might be worth checking your Gmail API setup and quotas."
         except Exception as e:
-            debug_print(f"EmailAgent: Error in process method: {str(e)}. Query: {query}")
-            # Fallback to general response using the original query
-            original_system_prompt = self.system_prompt
-            self.system_prompt = EMAIL_SYSTEM_PROMPT
-            response = await super().process(query) # Attempt to give a helpful general answer
-            self.system_prompt = original_system_prompt # Reset it
-            return f"I encountered an issue trying to process your email request for '{query}'. Detail: {str(e)}" 
+            debug_print(f"EmailAgent: Error in process method: {type(e).__name__} - {e}")
+            import traceback
+            debug_print(traceback.format_exc())
+            return f"I encountered an unexpected issue while trying to process your email request: {str(e)}"
+
+# Example Usage (for testing locally, not part of the agent file)
+# async def main():
+#     # Ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are in your .env or environment
+#     agent = EmailAgent()
+    
+#     # --- Test Authentication and Service Initialization (Implicitly in process) ---
+#     # First call might trigger OAuth flow in browser
+#     print("--- Testing initial connection (may trigger OAuth) ---")
+#     # A simple query to test if service can be established.
+#     # If .env vars are missing, this will print the warning from __init__ and then fail here.
+#     try:
+#        print(await agent.process("Can you check my email?")) # This will try to classify and then call check_new_emails
+#     except Exception as e:
+#         print(f"Test Error: {e}")
+#         if "OAuth flow failed" in str(e) or "Missing GOOGLE_CLIENT_ID" in str(e):
+#             print("Please ensure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in .env and credentials.json is not needed/handled, or that you complete the OAuth flow.")
+#         return
+
+#     # --- Test Checking Emails (after successful auth) ---
+#     print("\n--- Testing Check New Emails ---")
+#     print(await agent.process("any new mail?"))
+#     print(await agent.process("What's new in my inbox?"))
+
+#     # --- Test Searching Emails ---
+#     print("\n--- Testing Search Emails ---")
+#     print(await agent.process("find emails from myself about testing"))
+#     print(await agent.process("search for messages with attachment sent last month"))
+
+#     # --- Test Sending Emails (will require 'send' scope and confirmation logic) ---
+#     print("\n--- Testing Send Email ---")
+#     # The current process() sends directly after LLM classification. 
+#     # True confirmation would need user interaction handled by MasterAgent.
+#     print(await agent.process("Send an email to test@example.com with subject 'Hello from Agent' and body 'This is a test message.'"))
+#     print(await agent.process("Draft an email to my_friend@example.com. The subject is Dinner Plans. The body is Let's grab dinner next week!"))
+#     print(await agent.process("email john.doe@work.com about the report. it's ready")) # Test subject inference
+
+#     # --- Test Clarification ---
+#     print("\n--- Testing Clarification ---")
+#     print(await agent.process("send an email")) # Missing recipient
+#     print(await agent.process("search my emails")) # Missing search query
+
+# if __name__ == "__main__":
+#    import asyncio
+#    # Load .env variables if you're using python-dotenv
+#    # from dotenv import load_dotenv
+#    # load_dotenv()
+#    asyncio.run(main()) 
