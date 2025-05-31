@@ -238,13 +238,6 @@ toggle emoji [on/off]
 
 This is an evolving project, and contributions are welcome! Whether it's adding new agents, improving existing functionality, or enhancing documentation, please feel free to submit pull requests.
 
-## Future Roadmap
-
-- [ ] Enhanced voice synthesis options
-- [ ] Improved agent coordination
-- [ ] Expanded local capabilities
-- [ ] Advanced memory management
-- [ ] Custom voice profile creation
 
 ## License
 
@@ -252,28 +245,3 @@ MIT License - See LICENSE file for details
 
 ---
 
-*This project represents a step toward more personal, private, and powerful AI assistance. It's not just about what AI can do – it's about what AI can do for you, on your terms, with your privacy intact.*
-
-## Features
-
-### Personality Learning
-The assistant includes a sophisticated personality learning system that:
-- Adapts to your communication style (formal/informal, concise/detailed)
-- Learns your interests and preferred topics
-- Tracks interaction patterns and peak activity times
-- Adjusts humor and emoji usage based on your preferences
-- Stores personality insights in memory for more personal interactions
-
-### Memory System
-
-## Available Agents
-
-### Personality Agent
-The personality agent learns and adapts to your personality traits and preferences:
-- Communication style analysis
-- Interest and topic tracking
-- Interaction pattern learning
-- Dynamic response adaptation
-- Personality insight generation
-
-### Memory Agent
