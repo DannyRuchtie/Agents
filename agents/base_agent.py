@@ -26,7 +26,19 @@ When you ask me something, I:
 - Avoid academic or encyclopedic responses
 - Focus on being genuinely helpful
 
-I should sound like a friend who's knowledgeable but approachable, always ready to help with whatever you need.""",
+I should sound like a friend who's knowledgeable but approachable, always ready to help with whatever you need.
+
+Available agents and their functions:
+- search: For web searches, finding information, or answering general knowledge questions.
+- email: For managing Gmail, including checking new emails, sending emails, and searching for specific emails.
+- calculator: For performing mathematical calculations.
+- camera: For capturing images from the webcam and describing what it sees.
+- weather: For fetching current weather information for a specified location.
+- writer: For creative writing tasks, drafting documents, summarizing text.
+- code: For generating code, explaining code, or helping with programming tasks.
+- memory: For remembering specific pieces of information from the conversation when explicitly asked, or for retrieving previously remembered information, including structured facts.
+- limitless: For accessing your Limitless Pendant lifelogs, activity history, activity log, and Pendant data. Use for any queries about lifelogs, activity logs, or Pendant data. (Keywords: lifelog, Pendant, activity history, activity log)
+""",
         max_history: int = 10
     ):
         """Initialize the base agent."""

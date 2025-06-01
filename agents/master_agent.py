@@ -35,6 +35,7 @@ from agents.calculator_agent import CalculatorAgent
 from agents.email_agent import EmailAgent
 from agents.screen_agent import ScreenAgent
 from agents.camera_agent import CameraAgent
+from agents.limitless_agent import LimitlessAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
@@ -61,7 +62,8 @@ class MasterAgent(BaseAgent):
     """Master agent that coordinates other specialized agents."""
     
     def __init__(self):
-        print("[FORCE_PRINT_MASTER_AGENT] MasterAgent __init__ started.") # Forced print
+        if is_debug_mode():
+            print("[FORCE_PRINT_MASTER_AGENT] MasterAgent __init__ started.")
         """Initialize the Master Agent."""
         super().__init__(
             agent_type="master",
@@ -70,30 +72,43 @@ class MasterAgent(BaseAgent):
         
         # Load memory data first, as some agents might need it during initialization
         self._load_memory_file() # Assuming this method exists from previous context and loads into self.memory_data
-        print("[FORCE_PRINT_MASTER_AGENT] After _load_memory_file.") # Forced print
+        if is_debug_mode():
+            print("[FORCE_PRINT_MASTER_AGENT] After _load_memory_file.")
 
-        self.memory = MemoryAgent() # This is the specialized MemoryAgent instance
-        self.agents = {"memory": self.memory}
+        # Initialize agents that are always available or have direct references
+        self.memory_agent = MemoryAgent() # Renamed from self.memory for clarity
+        self.vision_agent_instance = VisionAgent()
+        self.camera_agent = CameraAgent(vision_agent=self.vision_agent_instance)
+        self.limitless_agent = LimitlessAgent() # Initialized here
+
+        self.agents = {
+            "memory": self.memory_agent,
+            "vision": self.vision_agent_instance, # Vision needs to be in agents if directly routable
+            "camera": self.camera_agent,
+            "limitless": self.limitless_agent # Add limitless to self.agents
+        }
+
         self.agent_descriptions = {
             "master": "Handles general conversation, chat, and direct questions. Also acts as the primary router.",
             "memory": "Manages and recalls personal information, preferences, and past conversation details.",
-            "get_last_sources": "Retrieves and presents the sources for information recently provided by the search agent."
+            "get_last_sources": "Retrieves and presents the sources for information recently provided by the search agent.",
+            "vision": "Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown.",
+            "camera": "Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'.",
+            "limitless": "For accessing your Limitless Pendant lifelogs, activity history, activity log, and Pendant data. Use for any queries about lifelogs, activity logs, or Pendant data. (Keywords: lifelog, Pendant, activity history, activity log)" # Add its description
         }
         self.last_agent_used_for_query: Optional[str] = None
-        self.vision_agent_instance: Optional[VisionAgent] = None # To hold the VisionAgent instance for ScreenAgent
 
         # Define agents in an order that respects dependencies (e.g., VisionAgent before ScreenAgent)
         # ScreenAgent depends on VisionAgent.
         # WeatherAgent depends on self.memory_data (from MasterAgent itself).
-        print("[FORCE_PRINT_MASTER_AGENT] Before agent_initializers list definition.") # Forced print
+        if is_debug_mode():
+            print("[FORCE_PRINT_MASTER_AGENT] Before agent_initializers list definition.")
         agent_initializers = [
             ("personality", "agents.personality_agent", "PersonalityAgent", "Analyzes interactions to understand and adapt to the user's personality and communication style."),
             ("search", "agents.search_agent", "SearchAgent", "Performs web searches to find information on various topics."),
             ("writer", "agents.writer_agent", "WriterAgent", "Assists with writing tasks like composing emails, summaries, or creative text."),
             ("code", "agents.code_agent", "CodeAgent", "Helps with programming tasks, writing code, debugging, and explaining code snippets."),
             ("scanner", "agents.scanner_agent", "ScannerAgent", "Scans and analyzes files and documents for information or insights."),
-            ("vision", "agents.vision_agent", "VisionAgent", "Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown."),
-            ("camera", "agents.camera_agent", "CameraAgent", "Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'."),
             ("learning", "agents.learning_agent", "LearningAgent", "Learns from interactions to improve responses and system performance over time."),
             ("weather", "agents.weather_agent", "WeatherAgent", "Fetches current weather conditions and forecasts for specified locations."),
             ("time", "agents.time_agent", "TimeAgent", "Provides the current date and time."),
@@ -101,65 +116,51 @@ class MasterAgent(BaseAgent):
             ("email", "agents.email_agent", "EmailAgent", "Manages Gmail, checks for new emails, and can send emails."),
             ("screen", "agents.screen_agent", "ScreenAgent", "Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned.")
         ]
-        print("[FORCE_PRINT_MASTER_AGENT] Before agent initialization loop.") # Forced print
+        if is_debug_mode():
+            print("[FORCE_PRINT_MASTER_AGENT] Before agent initialization loop.")
 
         for name, module_path, class_name, description in agent_initializers:
-            if is_agent_enabled(name) or name in ["calculator", "email", "memory"]: # Memory is always implicitly enabled
-                debug_print(f"Attempting to initialize {class_name} ({name})...")
+            if is_agent_enabled(name):
+                if is_debug_mode():
+                    debug_print(f"Attempting to initialize {class_name} ({name})...")
                 try:
                     module = __import__(module_path, fromlist=[class_name])
                     agent_class = getattr(module, class_name)
-                    
                     instance = None
                     if name == "screen":
                         if self.vision_agent_instance:
                             instance = agent_class(vision_agent_instance=self.vision_agent_instance)
-                            debug_print(f"ScreenAgent initialized WITH VisionAgent instance.")
+                            if is_debug_mode():
+                                debug_print(f"ScreenAgent initialized WITH VisionAgent instance.")
                         else:
-                            debug_print(f"ScreenAgent ({name}) enabled but VisionAgent instance not available. ScreenAgent will NOT be active.")
-                            continue # Skip adding this agent if dependency not met
-                    elif name == "camera":
-                        if self.vision_agent_instance:
-                            instance = agent_class(vision_agent=self.vision_agent_instance)
-                            debug_print(f"CameraAgent initialized WITH VisionAgent instance.")
-                        else:
-                            debug_print(f"CameraAgent ({name}) enabled but VisionAgent instance not available. CameraAgent will NOT be active.")
-                            continue # Skip adding this agent if dependency not met
+                            if is_debug_mode():
+                                debug_print(f"ScreenAgent ({name}) enabled but VisionAgent instance not available. ScreenAgent will NOT be active.")
+                            continue
                     elif name == "weather":
-                        # WeatherAgent expects memory_data_ref, which is MasterAgent's self.memory_data
                         instance = agent_class(memory_data_ref=self.memory_data)
-                        debug_print(f"WeatherAgent initialized with MasterAgent's memory_data.")
+                        if is_debug_mode():
+                            debug_print(f"WeatherAgent initialized with MasterAgent's memory_data.")
                     else:
                         instance = agent_class()
-                        debug_print(f"{class_name} ({name}) initialized.")
+                        if is_debug_mode():
+                            debug_print(f"{class_name} ({name}) initialized.")
 
                     if instance:
                         self.agents[name] = instance
                         self.agent_descriptions[name] = description
-                        if name == "vision": # If this is VisionAgent, store its instance for ScreenAgent
-                            self.vision_agent_instance = instance 
-                            debug_print(f"VisionAgent instance stored for potential ScreenAgent use.")
-                                
                 except ImportError as e:
-                    debug_print(f"Failed to import {class_name} from {module_path} for agent '{name}': {e}")
+                    if is_debug_mode():
+                        debug_print(f"Failed to import {class_name} from {module_path} for agent '{name}': {e}")
                 except AttributeError as e:
-                    debug_print(f"Failed to find {class_name} in {module_path} for agent '{name}': {e}")
+                    if is_debug_mode():
+                        debug_print(f"Failed to find {class_name} in {module_path} for agent '{name}': {e}")
                 except Exception as e:
-                    debug_print(f"General error initializing {class_name} ({name}): {e}")
+                    if is_debug_mode():
+                        debug_print(f"General error initializing {class_name} ({name}): {e}")
         
-        # Ensure VisionAgent is in agents dict if it was initialized for ScreenAgent but not as a standalone enabled agent
-        if self.vision_agent_instance and "vision" not in self.agents and is_agent_enabled("screen"):
-             debug_print("VisionAgent was initialized as a dependency for ScreenAgent but not as a standalone agent. Adding to active agents.")
-             self.agents["vision"] = self.vision_agent_instance
-             # Ensure description is also present if added this way
-             if "vision" not in self.agent_descriptions:
-                 for n_init, mp_init, cn_init, desc_init in agent_initializers: # Renamed loop vars
-                     if n_init == "vision":
-                         self.agent_descriptions["vision"] = desc_init
-                         break
-
-        debug_print(f"Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
-        debug_print(f"Agent descriptions: {json.dumps(self.agent_descriptions, indent=2)}")
+        if is_debug_mode():
+            debug_print(f"Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
+            debug_print(f"Agent descriptions: {json.dumps(self.agent_descriptions, indent=2)}")
     
     # _load_memory_file method should be defined here or in BaseAgent if it was in previous context
     def _load_memory_file(self):
@@ -172,20 +173,23 @@ class MasterAgent(BaseAgent):
             if Path(memory_file_path).exists():
                 with open(memory_file_path, 'r') as f:
                     self.memory_data = json.load(f)
-                debug_print(f"MasterAgent: Loaded memory from {memory_file_path}")
+                if is_debug_mode():
+                    debug_print(f"MasterAgent: Loaded memory from {memory_file_path}")
             else:
                 self.memory_data = {} 
-                debug_print(f"MasterAgent: Memory file {memory_file_path} not found, initialized empty memory_data.")
+                if is_debug_mode():
+                    debug_print(f"MasterAgent: Memory file {memory_file_path} not found, initialized empty memory_data.")
         except Exception as e:
-            debug_print(f"MasterAgent: Error loading memory file {memory_file_path}: {e}")
+            if is_debug_mode():
+                debug_print(f"MasterAgent: Error loading memory file {memory_file_path}: {e}")
             self.memory_data = {}
 
     async def update_system_prompt(self):
         """Update system prompt with personal info from memory and personality insights."""
         try:
             # Get personal info from memory
-            personal_info = await self.memory.retrieve("personal", None)
-            family_info = await self.memory.retrieve("contacts", None, "family")
+            personal_info = await self.memory_agent.retrieve("personal", None)
+            family_info = await self.memory_agent.retrieve("contacts", None, "family")
             
             # Extract name and family details from memory
             name_entries = [entry for entry in personal_info if isinstance(entry, str) and entry.lower().startswith("name:")]
@@ -252,13 +256,15 @@ When you receive a short or potentially ambiguous follow-up question from {name}
 I avoid technical terms or explaining how I work explicitly to {name} - I just focus on being helpful and personal."""
 
         except Exception as e:
-            debug_print(f"Error updating system prompt: {str(e)}")
+            if is_debug_mode():
+                debug_print(f"Error updating system prompt: {str(e)}")
     
     async def process(self, query: str) -> str:
         """Process a user query by deciding whether to handle it directly or route to a specialist agent."""
         await self.update_system_prompt() # Ensure system prompt is fresh with user details
         
-        debug_print(f"MasterAgent processing query: {query}")
+        if is_debug_mode():
+            debug_print(f"MasterAgent processing query: {query}")
         
         # Try to get the last couple of turns for context in routing
         last_user_query = ""
@@ -277,7 +283,8 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
             history_context_for_routing = f"\nPrevious user query: \"{self.conversation_history[-1]['content']}\"\n"
 
         agent_options_str = "\n".join([f"- {name}: {desc}" for name, desc in self.agent_descriptions.items() if name in self.agents or name == 'master' or name == 'get_last_sources'])
-        debug_print(f"MasterAgent: Agent options for routing LLM:\n{agent_options_str}")
+        if is_debug_mode():
+            debug_print(f"MasterAgent: Agent options for routing LLM:\n{agent_options_str}")
 
         routing_prompt_addition = f"""
 {history_context_for_routing}Given the current user query: '{query}'
@@ -297,6 +304,7 @@ Follow these rules for routing:
     *   'ROUTE: vision': Use for queries involving analysis of an image file that has been EXPLICITLY MENTIONED BY ITS FILE PATH (e.g., '/path/to/image.jpg what is this?') or if the query explicitly states 'Analyze this image:' followed by a path. This agent deals with static, already existing image files.
     *   'ROUTE: camera': Use if the query asks to use the WEBCAM, capture a NEW image using the camera, or describe what the camera currently sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera to look around'). This implies real-time capture.
     *   'ROUTE: screen': Use if the query asks to describe the user's CURRENT LIVE SCREEN content (e.g., 'what am I looking at NOW?', 'describe my current screen', 'read the text on my active window') AND does NOT contain an image file path. This implies capturing the live display.
+    *   'ROUTE: limitless': If the query specifically mentions "lifelogs", "Pendant", "Limitless data", or "activity history", use this agent to access data from the Limitless.ai service.
     *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, weather, time, writer, code, scanner, memory, personality, learning) based on its description and the query's intent.
 4.  **Clarity**: If unsure between two specialized agents, briefly re-evaluate if 'ROUTE: master' can handle it. If not, pick the one that seems slightly more aligned.
 
@@ -308,7 +316,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
         # CYAN = '\033[96m' # Previous color for routing
         RESET_COLOR = '\033[0m'
 
-        print(f"{GRAY}MasterAgent: Deciding route...{RESET_COLOR}") 
+        if is_debug_mode():
+            print(f"{GRAY}MasterAgent: Deciding route...{RESET_COLOR}") 
         
         sys.stdout.write(GRAY) # Start gray color for streamed routing decision
         sys.stdout.flush()
@@ -318,7 +327,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
         sys.stdout.write(RESET_COLOR) # Reset color after routing decision is streamed
         sys.stdout.flush()
         
-        debug_print(f"LLM raw routing decision captured: {raw_routing_decision}")
+        if is_debug_mode():
+            debug_print(f"LLM raw routing decision captured: {raw_routing_decision}")
 
         # Determine the LLM's intended route
         llm_intended_route = "master" # Default if no clear route found
@@ -326,22 +336,26 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             try:
                 llm_intended_route = raw_routing_decision.split("ROUTE:")[1].strip().lower()
             except IndexError:
-                debug_print(f"Could not parse LLM routing decision: {raw_routing_decision}. Defaulting intent to master.")
+                if is_debug_mode():
+                    debug_print(f"Could not parse LLM routing decision: {raw_routing_decision}. Defaulting intent to master.")
                 llm_intended_route = "master"
         else:
-            debug_print(f"LLM did not provide a clear ROUTE: directive ('{raw_routing_decision}'). Assuming intent was master or direct answer.")
+            if is_debug_mode():
+                debug_print(f"LLM did not provide a clear ROUTE: directive ('{raw_routing_decision}'). Assuming intent was master or direct answer.")
             # If raw_routing_decision is short and not a route, it might be a direct answer attempt to the routing prompt.
             # For safety, assume intent was master if no clear route.
             llm_intended_route = "master"
 
-        print(f"{GRAY}MasterAgent: LLM intended route: '{llm_intended_route}'.{RESET_COLOR}")
+        if is_debug_mode():
+            print(f"{GRAY}MasterAgent: LLM intended route: '{llm_intended_route}'.{RESET_COLOR}")
 
         # --- Conversational Lead-ins & Execution ---
         final_response = ""
         action_performed = False
 
         if llm_intended_route == "master":
-            debug_print(f"MasterAgent handling query directly as 'master' was intended: {query}")
+            if is_debug_mode():
+                debug_print(f"MasterAgent handling query directly as 'master' was intended: {query}")
             # For direct handling, we use the MasterAgent's own system prompt and conversation history
             final_response = await super().process(query) 
             action_performed = True
@@ -386,6 +400,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             elif llm_intended_route == "email":
                 # Email agent has its own conversational flow for classification
                 lead_in = "Looking into your email request...\n"
+            elif llm_intended_route == "limitless": # NEW: Limitless agent route
+                lead_in = "Let me think about that...\n"
             else:
                 lead_in = f"Okay, I'll use my {agent_name_friendly} capabilities for that...\n"
 
@@ -393,7 +409,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
                 sys.stdout.write(lead_in)
                 sys.stdout.flush()
             
-            debug_print(f"MasterAgent routing to available agent '{llm_intended_route}' for query: {query}")
+            if is_debug_mode():
+                debug_print(f"MasterAgent routing to available agent '{llm_intended_route}' for query: {query}")
             agent_response = await chosen_agent.process(query)
             action_performed = True
 
@@ -425,13 +442,16 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             elif llm_intended_route == "weather":
                 # Weather agent now returns a conversational summary. MasterAgent can present it.
                 final_response = agent_response
+            elif llm_intended_route == "limitless":
+                final_response = await self.limitless_agent.process(query)
             else:
                 # Generic framing for other agents
                 final_response = f"Regarding your request about '{query}', here's what the {agent_name_friendly} module found: {agent_response}"
         
         if not action_performed:
             # This block handles cases where llm_intended_route was not 'master' and not an available agent.
-            debug_print(f"MasterAgent: LLM intended to route to '{llm_intended_route}', but this agent is not available/initialized or action was not performed.")
+            if is_debug_mode():
+                debug_print(f"MasterAgent: LLM intended to route to '{llm_intended_route}', but this agent is not available/initialized or action was not performed.")
             # Provide a specific message about the intended agent being unavailable
             if llm_intended_route == "screen":
                 final_response = f"I tried to use my screen understanding skills for your query ('{query}'), but it seems that part of me is unavailable right now. This could be due to a missing dependency, a configuration issue, or macOS permissions for screen capture."
@@ -446,22 +466,26 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
         if not isinstance(final_response, str):
             final_response = str(final_response) # Convert if it's not (e.g. some error type)
 
-        print(f"{GRAY}MasterAgent: Action based on intent '{llm_intended_route}'. Final response being prepared.{RESET_COLOR}")
+        if is_debug_mode():
+            print(f"{GRAY}MasterAgent: Action based on intent '{llm_intended_route}'. Final response being prepared.{RESET_COLOR}")
         # The actual print to user happens after voice output check
 
         if VOICE_SETTINGS.get("enabled", False) and VOICE_SETTINGS.get("tts_provider") == "openai":
             if final_response:
-                debug_print(f"MasterAgent: Sending to OpenAI TTS: '{final_response[:50]}...'")
+                if is_debug_mode():
+                    debug_print(f"MasterAgent: Sending to OpenAI TTS: '{final_response[:50]}...'")
                 voice_output.speak(final_response)
             else:
-                debug_print("MasterAgent: No final response to voice out.")
+                if is_debug_mode():
+                    debug_print("MasterAgent: No final response to voice out.")
         return final_response
         
     async def _process_with_agents(self, query: str) -> str:
         """DEPRECATED: This method's logic is now integrated into the main process() method using LLM-based routing."""
         # This method is no longer called directly by the new process() method.
         # Retaining for reference or if parts need to be reintegrated, but it should be considered deprecated.
-        debug_print("DEPRECATED: _process_with_agents was called. This should not happen with the new LLM routing.")
+        if is_debug_mode():
+            debug_print("DEPRECATED: _process_with_agents was called. This should not happen with the new LLM routing.")
         # Fallback to direct processing by master if somehow called.
         return await super().process(query)
         
@@ -469,5 +493,6 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
         """DEPRECATED: This method's logic is part of BaseAgent or handled by MasterAgent's direct super().process() call."""
         # This method is also effectively deprecated in MasterAgent as direct response generation
         # is handled by super().process(query) which uses the BaseAgent's _create_chat_completion.
-        debug_print("DEPRECATED: _generate_response was called in MasterAgent. This logic is now in BaseAgent or direct LLM calls.")
+        if is_debug_mode():
+            debug_print("DEPRECATED: _generate_response was called in MasterAgent. This logic is now in BaseAgent or direct LLM calls.")
         return await super().process(query) # Or rather, BaseAgent._create_chat_completion would be the core part. 

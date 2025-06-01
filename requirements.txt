@@ -56,7 +56,7 @@ SpeechRecognition
 # For local STT
 openai-whisper
 # For Picovoice Wake Word
-pjporcupine
+pvporcupine
 # For ElevenLabs TTS (Optional, if you add that provider)
 # elevenlabs
 # For Coqui TTS (Alternative local TTS, might require more setup)
