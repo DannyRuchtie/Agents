@@ -5,6 +5,7 @@ import os
 import json
 import httpx # Using httpx for async requests
 from typing import Dict, Any, Optional
+import re
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
@@ -114,6 +115,7 @@ class WeatherAgent(BaseAgent):
 
         if not extracted_location:
             debug_print("WeatherAgent: No location in query from LLM. Checking memory for user's default location.")
+            # 1. Check for explicit default_location fact (legacy support)
             if isinstance(self.memory_data_ref, dict) and "fact_store" in self.memory_data_ref:
                 for fact in self.memory_data_ref["fact_store"]:
                     if isinstance(fact, dict) and fact.get("entity", "").lower() == "user" and fact.get("attribute", "").lower() == "default_location":
@@ -121,8 +123,25 @@ class WeatherAgent(BaseAgent):
                         if user_default_location:
                             extracted_location = user_default_location
                             debug_print(f"WeatherAgent: Using user default location from memory: {extracted_location}")
-                            break 
-            
+                            break
+            # 2. If not found, search 'personal' memories for location-like statements
+            if not extracted_location and isinstance(self.memory_data_ref, dict) and "personal" in self.memory_data_ref:
+                personal_memories = self.memory_data_ref["personal"]
+                location_candidates = []
+                for entry in personal_memories:
+                    if not isinstance(entry, dict):
+                        continue
+                    content = entry.get("content", "").lower()
+                    # Look for common location phrases
+                    match = re.search(r"i (live|am) in ([a-zA-Z\s]+)", content)
+                    if match:
+                        location = match.group(2).strip().capitalize()
+                        location_candidates.append((entry.get("timestamp", ""), location))
+                # Use the most recent such entry
+                if location_candidates:
+                    location_candidates.sort(reverse=True) # Most recent first
+                    extracted_location = location_candidates[0][1]
+                    debug_print(f"WeatherAgent: Extracted location from personal memory: {extracted_location}")
             if not extracted_location: # Still no location after checking memory
                 debug_print("WeatherAgent: No default location found in memory.")
                 return "I couldn't determine the location for the weather forecast from your query, nor find a default location in memory. Please specify a city or area."

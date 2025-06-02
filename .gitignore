@@ -11,6 +11,7 @@ secrets/
 credentials/
 config/secrets.json
 memory.json
+token.json
 
 # Virtual Environment
 venv/
