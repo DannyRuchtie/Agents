@@ -129,24 +129,7 @@
       "bm_george": "British male voice (George)",
       "bm_lewis": "British male voice (Lewis)"
     },
-    "stt_enabled": false,
-    "stt_provider": "whisper",
-    "whisper_model": "tiny.en",
-    "whisper_device": "cpu",
-    "stt_activation_phrase": "listening",
-    "stt_silence_timeout": 2,
-    "stt_phrase_time_limit": 10,
-    "wakeword_enabled": true,
-    "picovoice_access_key": "QS3qgAO5sCfcpzuanzWSj/sEYStU1R99+b7Lz86d24Yr1/4xoy6q3A==",
-    "picovoice_keywords": [
-      "porcupine"
-    ],
-    "picovoice_keyword_paths": [],
-    "picovoice_sensitivities": [
-      0.5
-    ],
-    "wakeword_post_silence_timeout": 3,
-    "wakeword_post_phrase_time_limit": 7
+    "picovoice_access_key": "QS3qgAO5sCfcpzuanzWSj/sEYStU1R99+b7Lz"
   },
   "system_settings": {
     "os_type": "macos",
