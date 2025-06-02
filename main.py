@@ -19,7 +19,7 @@ from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.learning_agent import LearningAgent
 from utils.voice import voice_output
-from utils.stt import get_stt_instance, reset_stt_instance
+from utils.stt import get_stt_instance
 
 from config.paths_config import ensure_directories
 from config.settings import (
@@ -51,16 +51,14 @@ def handle_transcribed_command(text: str):
 def initialize_stt_service():
     global stt_service
     if VOICE_SETTINGS.get("stt_enabled", False) or VOICE_SETTINGS.get("wakeword_enabled", False):
-        if is_debug_mode():
-            debug_print("Initializing STT service...")
+        debug_print("Initializing STT service...")
         stt_service = get_stt_instance(wake_word_callback=handle_transcribed_command)
         if VOICE_SETTINGS.get("wakeword_enabled", False) and stt_service and stt_service.porcupine:
             stt_service.start_wake_word_listening()
         elif VOICE_SETTINGS.get("wakeword_enabled", False):
             print("[Main Warning] Wake word is enabled in settings, but Porcupine failed to initialize in STT service.")
     else:
-        if is_debug_mode():
-            debug_print("STT/Wakeword not enabled, STT service not initialized by default.")
+        debug_print("STT/Wakeword not enabled, STT service not initialized by default.")
 
 def check_input() -> Optional[str]:
     """Check for user input from stdin or STT command queue without blocking."""
@@ -82,7 +80,6 @@ def check_input() -> Optional[str]:
 
 async def process_input(master_agent: MasterAgent, user_input: str):
     """Process user input and handle responses."""
-    global stt_service # Moved global declaration to the top of the function
     if not user_input:  # Skip empty input
         return
         
@@ -186,6 +183,7 @@ async def process_input(master_agent: MasterAgent, user_input: str):
         return
 
     # STT control commands
+    global stt_service # To allow re-initialization
     if user_input.lower() == "speech on" or user_input.lower() == "speech enable":
         if not VOICE_SETTINGS.get("stt_enabled", False):
             VOICE_SETTINGS["stt_enabled"] = True # General STT flag
@@ -233,23 +231,12 @@ async def process_input(master_agent: MasterAgent, user_input: str):
     if user_input.lower() == "speech status": 
         stt_enabled_flag = VOICE_SETTINGS.get("stt_enabled", False)
         ww_enabled_flag = VOICE_SETTINGS.get("wakeword_enabled", False)
-        stt_provider = VOICE_SETTINGS.get("stt_provider", "local_whisper")
-        
-        if stt_provider == "local_whisper":
-            stt_model_detail = f"Local Whisper Model: {VOICE_SETTINGS.get('whisper_model', 'N/A')}"
-        elif stt_provider == "openai_api":
-            stt_model_detail = f"OpenAI API Model: {VOICE_SETTINGS.get('openai_stt_model', 'N/A')}"
-        else:
-            stt_model_detail = "STT Model: Unknown provider"
-            
+        stt_model = VOICE_SETTINGS.get("whisper_model", "N/A")
         ww_keywords = VOICE_SETTINGS.get("picovoice_keywords", []) or VOICE_SETTINGS.get("picovoice_keyword_paths", [])
         
         status_parts = []
-        status_parts.append(f"General STT: {'Enabled' if stt_enabled_flag else 'Disabled'}")
-        status_parts.append(f"STT Provider: {stt_provider.replace('_', ' ').title()}")
-        status_parts.append(stt_model_detail)
+        status_parts.append(f"General STT (for 'listen'): {'Enabled' if stt_enabled_flag else 'Disabled'} (Whisper model: {stt_model})")
         status_parts.append(f"Wake Word: {'Enabled' if ww_enabled_flag else 'Disabled'} (Porcupine keywords: {ww_keywords})")
-        
         if ww_enabled_flag and stt_service and stt_service.is_listening_for_wake_word:
             status_parts.append("Wake word actively listening.")
         elif ww_enabled_flag and stt_service and not stt_service.porcupine:
@@ -260,37 +247,7 @@ async def process_input(master_agent: MasterAgent, user_input: str):
         stt_msg = "\n".join(status_parts)
         print(f"\nAssistant:\n{stt_msg}")
         if VOICE_SETTINGS["enabled"]:
-            voice_output.speak(f"Speech input status: General STT is {'Enabled' if stt_enabled_flag else 'Disabled'}. Provider is {stt_provider}. Wake word is {'Enabled' if ww_enabled_flag else 'Disabled'}.")
-        return
-
-    if user_input.lower().startswith("speech provider "):
-        parts = user_input.split(" ", 2)
-        if len(parts) == 3:
-            new_provider = parts[2].strip().lower()
-            if new_provider in ["local_whisper", "openai_api"]:
-                VOICE_SETTINGS["stt_provider"] = new_provider
-                save_settings()
-                feedback_msg = f"STT provider changed to {new_provider.replace('_', ' ').title()}."
-                print(f"\nAssistant: {feedback_msg}")
-                if VOICE_SETTINGS["enabled"]: voice_output.speak(feedback_msg)
-                
-                # Re-initialize STT service with the new provider setting
-                if stt_service:
-                    stt_service.release_resources() # Release old resources
-                reset_stt_instance() # Reset the global instance in stt.py
-                # Create a new instance with potentially new provider logic in SpeechToText __init__
-                stt_service = get_stt_instance(wake_word_callback=handle_transcribed_command)
-                # If wake word was on, try to restart it with the new STT service instanceclear
-                
-                if VOICE_SETTINGS.get("wakeword_enabled", False) and stt_service and stt_service.porcupine:
-                    stt_service.start_wake_word_listening()
-                elif VOICE_SETTINGS.get("wakeword_enabled", False):
-                     print("[Main Warning] Wake word enabled, but Porcupine may not be available for the new STT provider or failed to init.")
-
-            else:
-                print("\nAssistant: Invalid STT provider. Use 'local_whisper' or 'openai_api'.")
-        else:
-            print("\nAssistant: Usage: speech provider <local_whisper|openai_api>")
+            voice_output.speak(f"Speech input status: General STT is {'Enabled' if stt_enabled_flag else 'Disabled'}. Wake word is {'Enabled' if ww_enabled_flag else 'Disabled'}.")
         return
 
     if user_input.lower().startswith("speech model "):
@@ -373,9 +330,8 @@ Speech Input (STT) & Wake Word:
 - speech on/enable - Enables general STT. If wake word is configured and enabled in settings, starts wake word listening.
 - speech off/disable - Disables wake word listening if active. General STT (for 'listen' command) might remain enabled based on settings.
 - speech status - Show STT and wake word status, including loaded models/keywords.
-- speech provider <local_whisper|openai_api> - Change STT provider.
-- speech model <model_name> - Change STT model (for local Whisper: tiny.en, base.en; for OpenAI: whisper-1).
-- listen - Activate a one-time voice input using the configured STT provider.
+- speech model <model_name> - Change Whisper STT model (e.g., tiny.en, base.en).
+- listen - Activate a one-time voice input using Whisper STT.
   (Note: Configure wake word keywords, Picovoice AccessKey, and enable it in config/settings.py or .json)
 
 General:
@@ -389,58 +345,43 @@ General:
     
     # Check if the input is a file path and an image
     try:
-        if is_debug_mode():
-            print(f"[FORCE_PRINT_MAIN] Original user_input: '{user_input}'")
+        print(f"[FORCE_PRINT_MAIN] Original user_input: '{user_input}'")
         # Normalize path (e.g., remove surrounding quotes if dragged from some terminals)
         normalized_input = user_input.strip('\'"')
-        if is_debug_mode():
-            print(f"[FORCE_PRINT_MAIN] Normalized input: '{normalized_input}'")
+        print(f"[FORCE_PRINT_MAIN] Normalized input: '{normalized_input}'")
         
         is_file = os.path.isfile(normalized_input)
         exists = os.path.exists(normalized_input)
-        if is_debug_mode():
-            print(f"[FORCE_PRINT_MAIN] Path exists: {exists}, Is file: {is_file}")
+        print(f"[FORCE_PRINT_MAIN] Path exists: {exists}, Is file: {is_file}")
 
         if exists and is_file:
-            if is_debug_mode():
-                print(f"[FORCE_PRINT_MAIN] Path is an existing file: '{normalized_input}'")
+            print(f"[FORCE_PRINT_MAIN] Path is an existing file: '{normalized_input}'")
             # Check if it's a supported image type
             supported_extensions = ('.png', '.jpeg', '.jpg', '.gif', '.webp')
             is_image = normalized_input.lower().endswith(supported_extensions)
-            if is_debug_mode():
-                print(f"[FORCE_PRINT_MAIN] Is image type: {is_image}")
+            print(f"[FORCE_PRINT_MAIN] Is image type: {is_image}")
 
             if is_image:
-                if is_debug_mode():
-                    debug_print(f"Input detected as image file path: {normalized_input}")
-                if is_debug_mode():
-                    print(f"[FORCE_PRINT_MAIN] Confirmed image file. Original query: '{user_input}'")
+                debug_print(f"Input detected as image file path: {normalized_input}") # This is the conditional one
+                print(f"[FORCE_PRINT_MAIN] Confirmed image file. Original query: '{user_input}'")
                 user_input = f"Analyze this image: {normalized_input}"
-                if is_debug_mode():
-                    print(f"[FORCE_PRINT_MAIN] Transformed user_input for MasterAgent: '{user_input}'")
+                print(f"[FORCE_PRINT_MAIN] Transformed user_input for MasterAgent: '{user_input}'")
             else:
-                if is_debug_mode():
-                    debug_print(f"Input is a file, but not a recognized image type: {normalized_input}")
-                if is_debug_mode():
-                    print(f"[FORCE_PRINT_MAIN] File exists, but not a supported image type: '{normalized_input}'")
+                debug_print(f"Input is a file, but not a recognized image type: {normalized_input}")
+                print(f"[FORCE_PRINT_MAIN] File exists, but not a supported image type: '{normalized_input}'")
         elif '/' in user_input or '\\\\' in user_input: 
-            if is_debug_mode():
-                print(f"[FORCE_PRINT_MAIN] Input '{user_input}' looks like a path but does not exist as a file or is not a file.")
+            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' looks like a path but does not exist as a file or is not a file.")
             pass
         else:
-            if is_debug_mode():
-                print(f"[FORCE_PRINT_MAIN] Input '{user_input}' does not appear to be a file path.")
+            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' does not appear to be a file path.")
 
     except Exception as e:
-        if is_debug_mode():
-            debug_print(f"Error during file path check: {e}")
-        if is_debug_mode():
-            print(f"[FORCE_PRINT_MAIN] Exception during file path check: {e}")
+        debug_print(f"Error during file path check: {e}")
+        print(f"[FORCE_PRINT_MAIN] Exception during file path check: {e}")
         # Proceed with original input if error in path checking
 
     # Process query
-    if is_debug_mode():
-        print(f"[FORCE_PRINT_MAIN] Final user_input to MasterAgent.process: '{user_input}'")
+    print(f"[FORCE_PRINT_MAIN] Final user_input to MasterAgent.process: '{user_input}'")
     response = await master_agent.process(user_input)
     print(f"\nAssistant: {response}")
     
@@ -458,12 +399,10 @@ def main():
     # If main.py is in a subdirectory like 'src', and .env is in the project root, adjust accordingly:
     # env_path = script_dir.parent / ".env"
     
-    if is_debug_mode():
-        debug_print("Settings loaded successfully")
+    print(f"[DEBUG] Attempting to load .env file from: {env_path}")
     # Load .env, override existing env vars if any, and be verbose if file not found
-    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=is_debug_mode())
-    if is_debug_mode():
-        debug_print(f"load_dotenv successful: {loaded_successfully}")
+    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=True)
+    print(f"[DEBUG] load_dotenv successful: {loaded_successfully}")
 
     # Argument parsing for LLM provider
     parser = argparse.ArgumentParser(description="Run the AI Assistant with a specified LLM provider.")
@@ -479,8 +418,7 @@ def main():
     # Update the setting based on the command-line argument
     LLM_PROVIDER_SETTINGS["default_provider"] = args.llm
     save_settings() # Save the potentially updated setting
-    if is_debug_mode():
-        debug_print(f"Using LLM Provider: {args.llm.upper()}")
+    print(f"[INFO] Using LLM Provider: {args.llm.upper()}")
 
     # ---- TEMPORARY DEBUG ----
     # loaded_google_api_key = os.getenv("GOOGLE_API_KEY")
@@ -531,12 +469,10 @@ def main():
         initialize_stt_service()
         asyncio.run(chat_loop())
     finally:
-        if is_debug_mode():
-            debug_print("Main loop ended. Shutting down services.")
+        debug_print("Main loop ended. Shutting down services.")
         if stt_service:
             stt_service.release_resources()
-            if is_debug_mode():
-                debug_print("STT service resources released.")
+            debug_print("STT service resources released.")
         voice_output.shutdown() # Ensure voice output is shutdown cleanly
 
 if __name__ == "__main__":

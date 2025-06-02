@@ -130,8 +130,7 @@
       "bm_lewis": "British male voice (Lewis)"
     },
     "stt_enabled": false,
-    "stt_provider": "openai_api",
-    "openai_stt_model": "whisper-1",
+    "stt_provider": "whisper",
     "whisper_model": "tiny.en",
     "whisper_device": "cpu",
     "stt_activation_phrase": "listening",
@@ -147,13 +146,13 @@
       0.5
     ],
     "wakeword_post_silence_timeout": 3,
-    "wakeword_post_phrase_time_limit": 2
+    "wakeword_post_phrase_time_limit": 7
   },
   "system_settings": {
     "os_type": "macos",
     "has_location_access": true,
     "has_screen_access": true,
-    "debug_mode": true,
+    "debug_mode": false,
     "app_path": "/Users/dannyruchtie/Documents/Github/Agents"
   }
 }

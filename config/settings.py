@@ -135,8 +135,7 @@ VOICE_SETTINGS = {
     },
     # Speech-to-Text (STT) settings
     "stt_enabled": False, # STT disabled by default
-    "stt_provider": "openai_api", # "local_whisper" or "openai_api"
-    "openai_stt_model": "whisper-1", # Model for OpenAI STT API
+    "stt_provider": "whisper", # Currently only whisper is planned
     "whisper_model": "tiny.en", # Default whisper model (options: tiny, base, small, medium, large, or .en variants)
     "whisper_device": "cpu", # "cpu" or "cuda" if GPU is available
     "stt_activation_phrase": "listening", # Optional: a phrase to say to trigger STT input temporarily
@@ -159,7 +158,7 @@ SYSTEM_SETTINGS = {
     "os_type": "macos",  # Operating system
     "has_location_access": True,  # Whether location services are enabled
     "has_screen_access": True,  # Whether screen capture is enabled
-    "debug_mode": False,  # Debug mode ON by default for now
+    "debug_mode": True,  # Debug mode ON by default for now
     "app_path": str(Path(__file__).resolve().parent.parent) # Added app_path, resolves to project root
 }
 
