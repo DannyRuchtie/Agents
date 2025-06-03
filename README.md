@@ -154,17 +154,6 @@ You'll see a welcome message and a `You:` prompt.
     -   You can toggle it using commands like `voice on` / `voice off` (if implemented and recognized in `main.py`).
     -   The default TTS provider is OpenAI. Voice preferences (e.g., OpenAI voice model like "alloy", "nova") are set in `config/settings.py` under `VOICE_SETTINGS`.
 
--   **Apple Reminders Examples:**
-    -   "Remind me to call John tomorrow at 10am"
-    -   "Mark call John as complete"
-    -   "Delete call John reminder"
-    -   "Find call John reminder"
-
--   **Browser Agent Examples:**
-    -   "Go to example.com and take a screenshot."
-    -   "Open the website github.com and search for the repository 'browser-use' using the site's search bar."
-    -   "Scrape the main headlines from news.ycombinator.com."
-    -   Note: The BrowserAgent uses the `browser-use` library, which logs its actions extensively to the console. The agent itself will return a confirmation, but detailed browser activity will appear in your terminal.
 
 ## 🤝 Contributing
 
