@@ -43,6 +43,7 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
 | 🖥️ **Screen**      | Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned. |
 | 🔗 **Limitless**   | Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions.                     |
 | 📚 *Get Last Sources* | (Internal Action) Retrieves and presents the sources for information recently provided by the search agent.                                                        |
+| ⏰ **Reminders**   | Integrates with Apple Reminders to add, complete, delete, and search reminders using natural language queries. |
 
 
 ## 🚀 Getting Started
@@ -81,6 +82,12 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     pip install -r requirements.txt
     ```
     *(Ensure `ollama` is listed in `requirements.txt` if you plan to use it).*
+    
+    **For Apple Reminders integration on macOS:**
+    ```bash
+    pip install pyobjc pyobjc-framework-EventKit
+    ```
+    *(These are included in requirements.txt, but you may need to grant permissions on first use.)*
 
 ### Configuration
 
@@ -156,6 +163,11 @@ You'll see a welcome message and a `You:` prompt.
     -   (Removed: No longer available)
 -   **Wake Word Detection (Picovoice Porcupine):**
     -   (Removed: No longer available)
+-   **Apple Reminders Examples:**
+    -   "Remind me to call John tomorrow at 10am"
+    -   "Mark call John as complete"
+    -   "Delete call John reminder"
+    -   "Find call John reminder"
 
 ## 🤝 Contributing
 

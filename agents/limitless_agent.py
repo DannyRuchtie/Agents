@@ -73,6 +73,7 @@ class LimitlessAgent(BaseAgent):
             "Make your answer personal and natural, but strictly based on the provided lifelog content. "
             "If the user asks about a specific event, meeting, or moment, only share what is in the lifelog about that. "
             "If the user wants a summary, give a warm, friendly recap of the main moments and feelings you noticed, but only from the lifelog data. "
+            "Start your answer directly with the summary or relevant content, without any formal announcement or boilerplate. "
             "Here are the lifelogs:\n\n"
             f"{summary_content}\n\nUser's question: {query}"
         )

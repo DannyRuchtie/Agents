@@ -101,6 +101,7 @@ class MasterAgent(BaseAgent):
             ("email", "agents.email_agent", "EmailAgent", "Manages Gmail, checks for new emails, and can send emails."),
             ("screen", "agents.screen_agent", "ScreenAgent", "Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned."),
             ("limitless", "agents.limitless_agent", "LimitlessAgent", "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."),
+            ("reminders", "agents.reminders_agent", "RemindersAgent", "Integrates with Apple Reminders to add, complete, delete, and search reminders using natural language queries."),
         ]
         print("[FORCE_PRINT_MASTER_AGENT] Before agent initialization loop.") # Forced print
 

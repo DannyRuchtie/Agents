@@ -65,4 +65,6 @@ SpeechRecognition
 # pystray
 # Additional for specific audio backends if PyAudio has issues on some systems
 # sounddevice
-# pyaudio # Already listed but ensure it\'s uncommented if needed 
+# pyaudio # Already listed but ensure it\'s uncommented if needed
+pyobjc
+pyobjc-framework-EventKit 
