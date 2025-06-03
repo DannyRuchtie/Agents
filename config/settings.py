@@ -57,7 +57,10 @@ AGENT_SETTINGS = {
     "camera": {
         "enabled": True,
         "description": "Captures images from webcam and uses VisionAgent to describe them"
-    }
+    },"limitless": {
+       "enabled": True,
+       "description": "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."
+   }
 }
 
 # LLM Provider Settings

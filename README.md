@@ -101,6 +101,9 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
 
     # For Weather Agent (OpenWeatherMap)
     OPENWEATHERMAP_API_KEY="your_openweathermap_api_key_here"
+
+    #For getting yout Limitless AI lifelogs
+    LIMITLESS_API_KEY="your_limmitless_ai_api_key_here"
     ```
     **Important**: Never commit your `.env` file to version control. The `.gitignore` file should already be configured to ignore it.
 
@@ -166,31 +169,16 @@ This project is typically licensed under the MIT License (but please verify the 
 
 *This README aims to be a comprehensive guide. If you find inaccuracies or areas for improvement, please contribute!*
 
-## Personality Settings
 
-The assistant's personality can be customized:
-```bash
-# Adjust humor level (0.0 to 1.0)
-set humor 0.7
-
-# Set formality level (0.0 to 1.0)
-set formality 0.3
-
-# Toggle personality traits
-toggle trait [witty/empathetic/curious/enthusiastic]
-
-# Control emoji usage
-toggle emoji [on/off]
-```
 
 ## Security Notes
 
 - API keys (OpenAI and Google) are stored locally in your .env file
-- All document processing happens on your machine
+- All document processing happens on your machine (when using ollama)
 - Memory storage is local and under your control
 - Web access is configurable and can be restricted
-- Voice synthesis is performed locally using kokoro-onnx
-- Rate limiting is enabled by default to prevent API abuse
+- Voice synthesis is performed by OpenAI TTS (optional)
+
 
 ## Contributing
 

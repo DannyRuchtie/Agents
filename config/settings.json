@@ -52,6 +52,10 @@
       "enabled": true,
       "description": "Captures images from webcam and uses VisionAgent to describe them"
     },
+    "limitless": {
+      "enabled": true,
+      "description": "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."
+    },
     "personality_agent": {
       "enabled": true,
       "description": "Learns and adapts to user's personality and preferences"
