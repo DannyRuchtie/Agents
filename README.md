@@ -153,10 +153,7 @@ You'll see a welcome message and a `You:` prompt.
     -   Voice output is **disabled by default**.
     -   You can toggle it using commands like `voice on` / `voice off` (if implemented and recognized in `main.py`).
     -   The default TTS provider is OpenAI. Voice preferences (e.g., OpenAI voice model like "alloy", "nova") are set in `config/settings.py` under `VOICE_SETTINGS`.
--   **Speech Input (STT) - Local Whisper:**
-    -   (Removed: No longer available)
--   **Wake Word Detection (Picovoice Porcupine):**
-    -   (Removed: No longer available)
+
 -   **Apple Reminders Examples:**
     -   "Remind me to call John tomorrow at 10am"
     -   "Mark call John as complete"
