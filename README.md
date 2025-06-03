@@ -4,16 +4,8 @@
 
 I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
 
-## ✨ Core Philosophy
 
--   🗣️ **Conversational & Friendly**: Interacts naturally, like a close friend who's always ready to help.
--   🧠 **Intelligent Routing**: The Master Agent understands your query and delegates to the best specialized agent.
--   🧩 **Modular Agents**: A suite of agents, each with a specific skill set, working in harmony.
--   🔧 **Extensible**: Designed to easily incorporate new agents and capabilities.
--   💻 **Choice of LLM**: Supports both OpenAI (cloud) and Ollama (local) language models.
--   🔊 **Voice Enabled**: Can respond with voice output for a more engaging experience (powered by OpenAI TTS by default).
-
-## 🛠️ Meet the Agents: Your Specialist Team
+## 🛠️ Meet the Agents: Your Specialist 
 
 The heart of the assistant is its modular agent system, orchestrated by the Master Agent. Each agent has a specific role:
 
