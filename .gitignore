@@ -63,3 +63,4 @@ chroma-embeddings.parquet
 # User-specific data / Cache
 agent_memory.json
 token.json
+token.json
