@@ -7,6 +7,7 @@ from .memory_agent import MemoryAgent
 from .scanner_agent import ScannerAgent
 from .vision_agent import VisionAgent
 from .screen_agent import ScreenAgent
+from .limitless_agent import LimitlessAgent
 
 __all__ = [
     'BaseAgent',
@@ -17,4 +18,5 @@ __all__ = [
     'ScannerAgent',
     'VisionAgent',
     'ScreenAgent',
+    'LimitlessAgent',
 ] 

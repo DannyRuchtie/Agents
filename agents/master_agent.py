@@ -99,7 +99,8 @@ class MasterAgent(BaseAgent):
             ("time", "agents.time_agent", "TimeAgent", "Provides the current date and time."),
             ("calculator", "agents.calculator_agent", "CalculatorAgent", "Handles mathematical calculations and evaluates expressions."),
             ("email", "agents.email_agent", "EmailAgent", "Manages Gmail, checks for new emails, and can send emails."),
-            ("screen", "agents.screen_agent", "ScreenAgent", "Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned.")
+            ("screen", "agents.screen_agent", "ScreenAgent", "Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned."),
+            ("limitless", "agents.limitless_agent", "LimitlessAgent", "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."),
         ]
         print("[FORCE_PRINT_MASTER_AGENT] Before agent initialization loop.") # Forced print
 
@@ -297,6 +298,7 @@ Follow these rules for routing:
     *   'ROUTE: vision': Use for queries involving analysis of an image file that has been EXPLICITLY MENTIONED BY ITS FILE PATH (e.g., '/path/to/image.jpg what is this?') or if the query explicitly states 'Analyze this image:' followed by a path. This agent deals with static, already existing image files.
     *   'ROUTE: camera': Use if the query asks to use the WEBCAM, capture a NEW image using the camera, or describe what the camera currently sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera to look around'). This implies real-time capture.
     *   'ROUTE: screen': Use if the query asks to describe the user's CURRENT LIVE SCREEN content (e.g., 'what am I looking at NOW?', 'describe my current screen', 'read the text on my active window') AND does NOT contain an image file path. This implies capturing the live display.
+    *   'ROUTE: limitless': If the query is about your lifelogs, past activities, meetings, or previous interactions, or if the user asks about what they did, their schedule, or wants a summary of recent events from Limitless.
     *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, weather, time, writer, code, scanner, memory, personality, learning) based on its description and the query's intent.
 4.  **Clarity**: If unsure between two specialized agents, briefly re-evaluate if 'ROUTE: master' can handle it. If not, pick the one that seems slightly more aligned.
 
