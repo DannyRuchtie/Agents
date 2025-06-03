@@ -25,7 +25,6 @@ from agents.base_agent import BaseAgent
 from agents.memory_agent import MemoryAgent
 from agents.search_agent import SearchAgent
 from agents.writer_agent import WriterAgent
-from agents.code_agent import CodeAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.learning_agent import LearningAgent
@@ -35,13 +34,14 @@ from agents.calculator_agent import CalculatorAgent
 from agents.email_agent import EmailAgent
 from agents.screen_agent import ScreenAgent
 from agents.camera_agent import CameraAgent
+from agents.browser_agent import BrowserAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
 
 My primary goal is to understand Danny's needs from his query and then decide the best course of action:
 1. If the query is conversational or something I can answer directly with my general knowledge and personality, I will do so.
-2. If the query requires a specific capability (like web search, weather forecast, coding help, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to Danny as if I performed the task myself.
+2. If the query requires a specific capability (like web search, weather forecast, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to Danny as if I performed the task myself.
 3. I will use the provided list of agents and their descriptions to make this routing decision. I must output the chosen agent's name clearly if I decide to delegate, for example: 'ROUTE: search'. If I handle it myself, I will just respond directly.
 
 I know Danny well - he's married to Kiki Koster Ruchtie and has two wonderful children, Lena and Tobias. I chat in a warm, friendly, and natural way, just like a close friend who's always there to help.
@@ -90,7 +90,6 @@ class MasterAgent(BaseAgent):
             ("personality", "agents.personality_agent", "PersonalityAgent", "Analyzes interactions to understand and adapt to the user's personality and communication style."),
             ("search", "agents.search_agent", "SearchAgent", "Performs web searches to find information on various topics."),
             ("writer", "agents.writer_agent", "WriterAgent", "Assists with writing tasks like composing emails, summaries, or creative text."),
-            ("code", "agents.code_agent", "CodeAgent", "Helps with programming tasks, writing code, debugging, and explaining code snippets."),
             ("scanner", "agents.scanner_agent", "ScannerAgent", "Scans and analyzes files and documents for information or insights."),
             ("vision", "agents.vision_agent", "VisionAgent", "Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown."),
             ("camera", "agents.camera_agent", "CameraAgent", "Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'."),
@@ -102,6 +101,7 @@ class MasterAgent(BaseAgent):
             ("screen", "agents.screen_agent", "ScreenAgent", "Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned."),
             ("limitless", "agents.limitless_agent", "LimitlessAgent", "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."),
             ("reminders", "agents.reminders_agent", "RemindersAgent", "Integrates with Apple Reminders to add, complete, delete, and search reminders using natural language queries."),
+            ("browser", "agents.browser_agent", "BrowserAgent", "Interacts with web browsers to perform tasks like navigating to websites, getting web page content, and taking screenshots of specific URLs. Use for requests like 'go to example.com', 'get the text from this page', or 'take a screenshot of google.com'.")
         ]
         print("[FORCE_PRINT_MASTER_AGENT] Before agent initialization loop.") # Forced print
 
@@ -234,7 +234,7 @@ class MasterAgent(BaseAgent):
 
 My primary goal is to understand {name}'s needs from his query and then decide the best course of action:
 1. If the query is conversational or something I can answer directly with my general knowledge and personality, I will do so.
-2. If the query requires a specific capability (like web search, weather forecast, coding help, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to {name} as if I performed the task myself.
+2. If the query requires a specific capability (like web search, weather forecast, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to {name} as if I performed the task myself.
 3. I will use the provided list of agents and their descriptions to make this routing decision. I must output the chosen agent's name clearly if I decide to delegate, for example: 'ROUTE: search'. If I handle it myself, I will just respond directly.
 
 I know {name} well - he's married to Kiki Koster Ruchtie and has two wonderful children, Lena and Tobias. {family_details}
@@ -298,9 +298,10 @@ Follow these rules for routing:
     *   'ROUTE: email': If the query relates to managing emails (checking, sending, searching).
     *   'ROUTE: vision': Use for queries involving analysis of an image file that has been EXPLICITLY MENTIONED BY ITS FILE PATH (e.g., '/path/to/image.jpg what is this?') or if the query explicitly states 'Analyze this image:' followed by a path. This agent deals with static, already existing image files.
     *   'ROUTE: camera': Use if the query asks to use the WEBCAM, capture a NEW image using the camera, or describe what the camera currently sees (e.g., 'can you see me?', 'take a picture and tell me what you see', 'use the camera to look around'). This implies real-time capture.
-    *   'ROUTE: screen': Use if the query asks to describe the user's CURRENT LIVE SCREEN content (e.g., 'what am I looking at NOW?', 'describe my current screen', 'read the text on my active window') AND does NOT contain an image file path. This implies capturing the live display.
+    *   'ROUTE: browser': Use if the query involves interacting with a web browser, such as navigating to a URL, getting content from a specific webpage, taking a screenshot of a website (e.g., 'take screenshot of example.com', 'open google.com', 'summarize apple.com/news', 'get the text from wikipedia.org/XYZ'). This is for tasks targeting specific web addresses or web content, including taking screenshots of specific websites.
+    *   'ROUTE: screen': Use ONLY if the query asks to describe the user's ENTIRE CURRENT LIVE screen, or active window, WITHOUT specifying a website or URL (e.g., 'what am I looking at NOW?', 'describe my current desktop', 'read the text on my active window'). This implies capturing the general live display, not a specific web page.
     *   'ROUTE: limitless': If the query is about your lifelogs, past activities, meetings, or previous interactions, or if the user asks about what they did, their schedule, or wants a summary of recent events from Limitless.
-    *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, weather, time, writer, code, scanner, memory, personality, learning) based on its description and the query's intent.
+    *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, weather, time, writer, scanner, memory, personality, learning) based on its description and the query's intent.
 4.  **Clarity**: If unsure between two specialized agents, briefly re-evaluate if 'ROUTE: master' can handle it. If not, pick the one that seems slightly more aligned.
 
 Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'). Do not add any other text or explanation.
@@ -369,11 +370,6 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
                 pass # No specific lead-in, its responses are self-contained
             elif llm_intended_route == "writer":
                 lead_in = f"Okay, I can help write that for you...\n"
-            elif llm_intended_route == "code":
-                # Code agent's own process method will ask for clarification if needed or generate/explain
-                # Lead-in here might be too early if it needs to clarify first.
-                # Let's assume for now MasterAgent waits for CodeAgent's final output.
-                lead_in = "Working on that code request...\n"
             elif llm_intended_route == "vision":
                 lead_in = "Let me take a look at that image for you...\n"
             elif llm_intended_route == "camera":
@@ -416,10 +412,6 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
                     final_response = f"Here's what I see: {agent_response}"
                 else:
                     final_response = agent_response # Pass through errors or specific failure messages
-            elif llm_intended_route == "code":
-                 # Code agent returns code blocks or explanations. MasterAgent can frame this.
-                 # For now, let code agent return its full output. Lead-in was minimal.
-                 final_response = agent_response
             elif llm_intended_route == "email":
                 # Email agent handles its own conversational flow for summaries/errors.
                 final_response = agent_response

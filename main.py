@@ -14,7 +14,7 @@ from agents.master_agent import MasterAgent
 from agents.memory_agent import MemoryAgent
 from agents.search_agent import SearchAgent
 from agents.writer_agent import WriterAgent
-from agents.code_agent import CodeAgent
+# from agents.code_agent import CodeAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.learning_agent import LearningAgent

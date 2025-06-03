@@ -21,7 +21,6 @@ from agents.base_agent import BaseAgent
 from agents.memory_agent import MemoryAgent
 from agents.search_agent import SearchAgent
 from agents.writer_agent import WriterAgent
-from agents.code_agent import CodeAgent
 from agents.scanner_agent import ScannerAgent
 from agents.vision_agent import VisionAgent
 from agents.location_agent import LocationAgent
@@ -40,7 +39,6 @@ I analyze requests and route them to the appropriate specialized agent:
 - Memory agent for conversation history
 - Search agent for information lookup
 - Writer agent for text generation
-- Code agent for programming help
 - Scanner agent for document processing
 - Location agent for location-based tasks
 - Learning agent for educational content
@@ -59,8 +57,6 @@ I ensure each request is handled by the most appropriate agent."""
             self.agents["search"] = SearchAgent()
         if is_agent_enabled("writer"):
             self.agents["writer"] = WriterAgent()
-        if is_agent_enabled("code"):
-            self.agents["code"] = CodeAgent()
         if is_agent_enabled("scanner"):
             self.agents["scanner"] = ScannerAgent()
         if is_agent_enabled("vision"):

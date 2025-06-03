@@ -20,11 +20,23 @@ Example: User query "Is it raining in Tokyo?" -> {"location": "Tokyo"}
 If no specific location is mentioned (e.g. "what is the weather like?", "how is the weather?"), respond with {"location": null}.
 """
 
+# New System Prompt for Location Resolution
+LOCATION_RESOLUTION_PROMPT_TEMPLATE = """You are an AI assistant that resolves potentially ambiguous location names into specific cities for weather lookups.
+Given the user's location query: '{location_query}'
+What is the most likely specific city and state/country this refers to? 
+- If it's a known landmark or company headquarters (e.g., 'Apple HQ', 'Eiffel Tower'), provide its city and state/country.
+- If it's an abbreviation (e.g., 'SF', 'NYC'), expand it to the full city and state/country.
+- If it's already a specific city and state/country (e.g., 'London, UK', 'Paris, France'), return it as is.
+- If it seems like a general area or is too vague to pinpoint a specific city for a weather forecast (e.g., 'the mountains', 'near the beach'), or if you cannot confidently determine a specific city, respond with the original query: '{location_query}'.
+
+Respond with ONLY the resolved location string (e.g., 'Cupertino, CA', 'San Francisco, CA', 'Paris, France') and nothing else.
+"""
+
 # System prompt for summarizing weather data from API
 WEATHER_SUMMARY_PROMPT_TEMPLATE = """You are an AI assistant that provides clear and concise weather summaries.
 Based on the following weather data (in JSON format), provide a user-friendly, conversational summary.
 Mention the current temperature, feels-like temperature, main weather condition (e.g., sunny, cloudy, rain), humidity, and wind speed.
-Convert temperature from Kelvin to Celsius (Celsius = Kelvin - 273.15).
+Convert temperature from Kelvin to Celsius (Celsius = Kelvin - 273.15) if the 'temp' field is > 100 (indicating Kelvin). If temp is already low (likely Celsius from 'metric' units), use as is.
 If essential data is missing, state that you couldn't retrieve full details.
 
 Weather Data:
@@ -146,19 +158,42 @@ class WeatherAgent(BaseAgent):
                 debug_print("WeatherAgent: No default location found in memory.")
                 return "I couldn't determine the location for the weather forecast from your query, nor find a default location in memory. Please specify a city or area."
         
-        debug_print(f"WeatherAgent: Final location for weather lookup: {extracted_location}")
-        weather_api_data = await self.get_weather(extracted_location)
+        # --- New Location Resolution Step ---
+        resolved_location = extracted_location # Start with the extracted/default location
+        if extracted_location: # Only attempt resolution if we have some location string
+            debug_print(f"WeatherAgent: Attempting to resolve location: '{extracted_location}'")
+            original_system_prompt_for_resolution = self.system_prompt
+            self.system_prompt = LOCATION_RESOLUTION_PROMPT_TEMPLATE.format(location_query=extracted_location)
+            # The query to super().process for resolution can be simple, as the main instruction is in the prompt
+            resolution_query_placeholder = f"Resolve this location: {extracted_location}"
+            try:
+                llm_resolved_location = await super().process(resolution_query_placeholder)
+                # The LLM is instructed to return ONLY the location string, so strip any potential whitespace/newlines
+                llm_resolved_location = llm_resolved_location.strip()
+                if llm_resolved_location and llm_resolved_location.lower() != extracted_location.lower() and llm_resolved_location.lower() != "unknown":
+                    debug_print(f"WeatherAgent: Location '{extracted_location}' resolved to '{llm_resolved_location}' by LLM.")
+                    resolved_location = llm_resolved_location
+                else:
+                    debug_print(f"WeatherAgent: LLM did not provide a different resolution for '{extracted_location}'. Using original/extracted.")
+            except Exception as e:
+                debug_print(f"WeatherAgent: Error during LLM location resolution step: {e}. Using original extracted location.")
+            finally:
+                self.system_prompt = original_system_prompt_for_resolution # Reset system prompt
+        # --- End Location Resolution Step ---
+
+        debug_print(f"WeatherAgent: Final location for weather lookup (after potential resolution): {resolved_location}")
+        weather_api_data = await self.get_weather(resolved_location)
 
         if not weather_api_data:
-            return f"Sorry, I couldn't retrieve weather data for {extracted_location} at the moment due to an unexpected issue with the weather service connection."
+            return f"Sorry, I couldn't retrieve weather data for {resolved_location} at the moment due to an unexpected issue with the weather service connection."
         
         if weather_api_data.get("error"):
             api_error_message = weather_api_data.get("message", "an unknown issue")
             if weather_api_data.get("status_code") == 404:
-                return f"I couldn't find weather information for '{extracted_location}'. Please check the location name and try again."
+                return f"I couldn't find weather information for '{resolved_location}'. Please check the location name and try again."
             elif weather_api_data.get("status_code") == 401: # Unauthorized
                  return f"I can't access the weather service right now due to an authentication issue (API key problem). Please check the setup."
-            return f"Sorry, I encountered an error when fetching weather data for {extracted_location}: {api_error_message}."
+            return f"Sorry, I encountered an error when fetching weather data for {resolved_location}: {api_error_message}."
 
         # Use LLM to summarize the weather data
         # Temporarily set a different system prompt for summarization
