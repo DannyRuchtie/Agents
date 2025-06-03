@@ -51,7 +51,6 @@ sounddevice
 pvporcupine
 websockets
 elevenlabs
-asyncio
 SpeechRecognition
 # For local STT
 # For ElevenLabs TTS (Optional, if you add that provider)
@@ -67,4 +66,25 @@ SpeechRecognition
 # sounddevice
 # pyaudio # Already listed but ensure it\'s uncommented if needed
 pyobjc
-pyobjc-framework-EventKit 
+pyobjc-framework-EventKit
+
+# Added for BrowserAgent
+browser-use>=0.2.5 # Specify a version or use latest
+# langchain-openai already listed above
+playwright>=1.40 # browser-use depends on Playwright
+
+# For local STT
+# For ElevenLabs TTS (Optional, if you add that provider)
+# elevenlabs
+# For Coqui TTS (Alternative local TTS, might require more setup)
+# TTS
+# For specific hardware acceleration if needed (check Whisper docs)
+# e.g., for NVIDIA GPUs
+# triton
+# For system tray icon (if you decide to implement it)
+# pystray
+# Additional for specific audio backends if PyAudio has issues on some systems
+# sounddevice
+# pyaudio # Already listed but ensure it\'s uncommented if needed
+# pyobjc
+# pyobjc-framework-EventKit 

@@ -13,6 +13,7 @@ from agents.calculator_agent import CalculatorAgent
 from agents.weather_agent import WeatherAgent
 from agents.vision_agent import VisionAgent # Added
 from agents.camera_agent import CameraAgent # Added
+from agents.browser_agent import BrowserAgent # Added for browser automation
 
 from config.settings import debug_print # Assuming debug_print is in config.settings
 
@@ -20,8 +21,10 @@ MEMORY_FILE_PATH = "agent_memory.json"
 
 MASTER_SYSTEM_PROMPT = """You are a master AI agent coordinating a team of specialized AI agents.
 Your primary role is to understand the user's request, current conversation history, and route it to the most appropriate specialized agent.
+
 Available agents and their functions:
-- search: For web searches, finding information, or answering general knowledge questions.
+- search: Use for general web searches to find information, answer questions, or discover websites when the user does NOT provide a specific URL or clear instruction to interact with a known site. Examples: 'What is the capital of Canada?', 'Find recent news about renewable energy', 'Search for reviews of the new iPhone'.
+- browser: Use for direct interactions with specific websites. This includes navigating to URLs, taking screenshots, scraping data from a given page, filling forms, or any other direct manipulation of a web page. Use this if the user provides a URL or names a specific website and asks to perform an action on it. Examples: 'Go to google.com and search for puppies', 'Take a screenshot of github.com/features', 'Scrape the main headlines from bbc.com/news', 'Log into my account on example.com'. DO NOT use for general searches if a URL is not provided or clearly implied for direct action.
 - email: For managing Gmail, including checking new emails, sending emails, and searching for specific emails.
 - calculator: For performing mathematical calculations.
 - camera: For capturing images from the webcam and describing what it sees. 
@@ -36,12 +39,16 @@ Respond with a JSON object containing:
 {
   "route_to_agent": "agent_name",
   "action_type": "specific_action", // Optional, context-dependent
-  "parameters": { // agent-specific parameters. For commit_structured_fact, expect entity, attribute, value.
+  "parameters": { // agent-specific parameters.
     "query_for_agent": "full user query or modified query for the agent",
     // ... other parameters
   },
   "explanation": "Brief explanation of why this agent and action were chosen."
 }
+
+Distinguishing Search vs. Browser:
+- If the user asks to 'search for X', 'find information about Y', or asks a question that requires looking up information online without specifying a particular website to act upon, use 'search'.
+- If the user says 'go to [URL]', 'open [website]', 'scrape data from [URL]', 'take a screenshot of [website]', 'click the button on [page]', or any other direct action on a specific web page, use 'browser'.
 
 CRITICAL OVERRIDE: For any queries related to seeing the user, using the camera, or looking at something via webcam (e.g., "can you see me?", "look at me", "what do I look like?", "use the camera", "show me what you see", "can u see me"), you MUST ALWAYS set "route_to_agent": "camera" in the JSON response. This is a strict directive and takes precedence over other routing considerations for these specific queries. Do not attempt to answer these types of questions yourself; always delegate to the 'camera' agent.
 
@@ -54,12 +61,13 @@ Specific Instructions for "memory" route:
 - If the user asks to retrieve/query stored information (e.g.,"what was Kiki's email?", "what's my favorite color?", "what is my default location?"), set "action_type": "query_memory". The LLM should try to identify the entity and attribute the user is asking about in the parameters, e.g., {"entity": "Kiki", "attribute": "email"} or {"entity": "user", "attribute": "default_location"}.
 - For other general interactions related to memory capabilities not covered above, set "action_type": "general_memory_interaction".
 
-If routing to 'email' for sending, try to extract 'to', 'subject', 'body'.
-If routing to 'email' for searching, try to extract 'search_terms'.
-If routing to 'search', pass the user's query mostly as-is to 'query_for_agent'.
+Parameter Passing:
+- For 'search', 'browser', 'calculator', 'weather', 'camera', 'writer', 'code': pass the user's full or appropriately rephrased query/instruction as "query_for_agent" in parameters.
+- For 'email' (sending): try to extract 'to', 'subject', 'body' into parameters.
+- For 'email' (searching): try to extract 'search_terms' into parameters.
 
 Use the conversation history to understand follow-up questions and context.
-Prioritize direct agent routing if a specialized agent clearly fits.
+Prioritize direct agent routing if a specialized agent clearly fits based on the distinctions provided.
 If no specific agent is a clear match, you can attempt to answer directly if it's a simple conversational query or a question about your capabilities. In such cases, use "route_to_agent": "master_agent_direct".
 """
 
@@ -74,6 +82,7 @@ class MasterAgent(BaseAgent):
         self.calculator_agent = CalculatorAgent()
         self.vision_agent = VisionAgent() # Initialized VisionAgent
         self.camera_agent = CameraAgent(vision_agent=self.vision_agent) # Initialized CameraAgent
+        self.browser_agent = BrowserAgent() # Added BrowserAgent
         self._load_memory_file() # Load memory at startup BEFORE initializing agents that need it
         self.weather_agent = WeatherAgent(memory_data_ref=self.memory_data) 
         # self.memory_agent = MemoryAgent() # If we create a dedicated class
@@ -219,7 +228,7 @@ class MasterAgent(BaseAgent):
             response_content = f"Could not route request: {agent_choice} with action {action_type}"
 
             # --- Context Injection from Fact Store (Phase 2) ---
-            if agent_choice in ["email", "search"]: # Apply to agents where entity context is useful
+            if agent_choice in ["email", "search", "browser"]: # Added browser to context injection if applicable
                 if "fact_store" in self.memory_data:
                     augmented_query = query_for_agent
                     facts_used_for_augmentation = [] 
@@ -257,16 +266,18 @@ class MasterAgent(BaseAgent):
             if agent_choice == "search":
                 response_content = await self.search_agent.process(query_for_agent)
             elif agent_choice == "email":
-                response_content = await self.email_agent.process(query_for_agent)
+                response_content = await self.email_agent.process(parameters)
             elif agent_choice == "calculator":
                 response_content = await self.calculator_agent.process(query_for_agent)
-            elif agent_choice == "camera": # Added camera route
+            elif agent_choice == "camera":
                 response_content = await self.camera_agent.process(query_for_agent)
             elif agent_choice == "weather":
                 response_content = await self.weather_agent.process(query_for_agent)
+            elif agent_choice == "browser": # Added browser agent routing
+                response_content = await self.browser_agent.process(query_for_agent)
             elif agent_choice == "memory":
                 if action_type == "commit_previous_turn_to_memory":
-                    if len(self.conversation_history) >= 2:
+                    if len(self.conversation_history) >= 2 and self.conversation_history[-2]["role"] == "assistant":
                         item_to_remember = ""
                         for i in range(len(self.conversation_history) - 2, -1, -1):
                             if self.conversation_history[i]["role"] == "assistant":

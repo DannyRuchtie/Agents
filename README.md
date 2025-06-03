@@ -29,7 +29,8 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
 | 🎩 **Master**      | Handles general conversation, chat, and direct questions. Also acts as the primary router.                                                                          |
 | 💾 **Memory**      | Manages and recalls personal information, preferences, and past conversation details. (Always Active)                                                               |
 | 😊 **Personality** | Analyzes interactions to understand and adapt to the user's personality and communication style.                                                                      |
-| 🔍 **Search**      | Performs web searches to find information on various topics.                                                                                                      |
+| 🔍 **Search**      | Performs general web searches to find information, answer questions, or discover websites when a specific URL is not provided. Example: 'What is the capital of France?'.                                                                                                      |
+| 🌐 **Browser**     | Interacts directly with specific websites. Navigates to URLs, takes screenshots, scrapes data from a given page, fills forms. Use if a URL is provided or a specific site action is requested (e.g., 'Go to example.com and take a screenshot', 'Scrape headlines from bbc.com/news'). Powered by `browser-use`. |
 | ✍️ **Writer**      | Assists with writing tasks like composing emails, summaries, or creative text.                                                                                    |
 | 💻 **Code**        | Helps with programming tasks, writing code, debugging, and explaining code snippets.                                                                                |
 | 📄 **Scanner**     | Scans and analyzes files and documents for information or insights.                                                                                                 |
@@ -89,6 +90,13 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     ```
     *(These are included in requirements.txt, but you may need to grant permissions on first use.)*
 
+    **For Browser Agent (Web Automation):**
+    The `browser-use` library requires Playwright browsers. Install them by running:
+    ```bash
+    playwright install chromium --with-deps
+    ```
+    *(You can also install `firefox` or `webkit` if preferred, but `chromium` is commonly used. The `--with-deps` flag helps install necessary OS-level dependencies for Playwright browsers.)*
+
 ### Configuration
 
 1.  **Set Up Environment Variables (`.env` file):**
@@ -112,6 +120,8 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     #For getting yout Limitless AI lifelogs
     LIMITLESS_API_KEY="your_limmitless_ai_api_key_here"
     ```
+    **Important**: The `BrowserAgent` uses `langchain_openai` by default (specifically `gpt-4o` as configured in `agents/browser_agent.py`). Ensure your `OPENAI_API_KEY` is set in the `.env` file for the BrowserAgent to function.
+
     **Important**: Never commit your `.env` file to version control. The `.gitignore` file should already be configured to ignore it.
 
 2.  **Ollama Setup (if using as your LLM provider):**
@@ -168,6 +178,12 @@ You'll see a welcome message and a `You:` prompt.
     -   "Mark call John as complete"
     -   "Delete call John reminder"
     -   "Find call John reminder"
+
+-   **Browser Agent Examples:**
+    -   "Go to example.com and take a screenshot."
+    -   "Open the website github.com and search for the repository 'browser-use' using the site's search bar."
+    -   "Scrape the main headlines from news.ycombinator.com."
+    -   Note: The BrowserAgent uses the `browser-use` library, which logs its actions extensively to the console. The agent itself will return a confirmation, but detailed browser activity will appear in your terminal.
 
 ## 🤝 Contributing
 
