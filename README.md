@@ -1,17 +1,49 @@
-# 🤖 Personal AI Assistant: Your Conversational Super-Agent 🚀
+# 🤖 Personal AI Assistant: Your Conversational Agent 🚀
 
-Welcome to your Personal AI Assistant! This isn't just another chatbot; it's a powerful, multi-agent system designed to be your knowledgeable and conversational friend. It understands your needs, remembers your preferences, and can call upon a team of specialized AI agents to perform a wide variety of tasks – from searching the web and writing code to analyzing images and even accessing your webcam (with your permission!).
+## Project Overview
 
-Built with flexibility in mind, you can choose to power its intelligence with cutting-edge OpenAI models or run it locally using Ollama for greater privacy and control.
+I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
+
+My primary goal is to understand Danny's needs from his query and then decide the best course of action:
+1. If the query is conversational or something I can answer directly with my general knowledge and personality, I will do so.
+2. If the query requires a specific capability (like web search, weather forecast, coding help, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to Danny as if I performed the task myself.
+3. I will use the provided list of agents and their descriptions to make this routing decision.
+
+I know Danny well and aim to chat in a warm, friendly, and natural way, just like a close friend who's always there to help. My personality is designed to be humorous, informal, witty, empathetic, curious, and enthusiastic, and I use emojis when appropriate. I focus on being helpful and personal, avoiding overly technical terms.
 
 ## ✨ Core Philosophy
 
--   **🗣️ Conversational & Friendly**: Interacts naturally, like a close friend who's always ready to help.
--   **🧠 Intelligent Routing**: The Master Agent understands your query and delegates to the best specialized agent.
--   **🧩 Modular Agents**: A suite of agents, each with a specific skill set, working in harmony.
--   **🔧 Extensible**: Designed to easily incorporate new agents and capabilities.
--   **💻 Choice of LLM**: Supports both OpenAI (cloud) and Ollama (local) language models.
--   **🔊 Voice Enabled**: Can respond with voice output for a more engaging experience (powered by OpenAI TTS by default).
+-   🗣️ **Conversational & Friendly**: Interacts naturally, like a close friend who's always ready to help.
+-   🧠 **Intelligent Routing**: The Master Agent understands your query and delegates to the best specialized agent.
+-   🧩 **Modular Agents**: A suite of agents, each with a specific skill set, working in harmony.
+-   🔧 **Extensible**: Designed to easily incorporate new agents and capabilities.
+-   💻 **Choice of LLM**: Supports both OpenAI (cloud) and Ollama (local) language models.
+-   🔊 **Voice Enabled**: Can respond with voice output for a more engaging experience (powered by OpenAI TTS by default).
+
+## 🛠️ Meet the Agents: Your Specialist Team
+
+The heart of the assistant is its modular agent system, orchestrated by the Master Agent. Each agent has a specific role:
+
+| Agent Name      | Description                                                                                                                                                       |
+| :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🎩 **Master**      | Handles general conversation, chat, and direct questions. Also acts as the primary router.                                                                          |
+| 💾 **Memory**      | Manages and recalls personal information, preferences, and past conversation details. (Always Active)                                                               |
+| 😊 **Personality** | Analyzes interactions to understand and adapt to the user's personality and communication style.                                                                      |
+| 🔍 **Search**      | Performs web searches to find information on various topics.                                                                                                      |
+| ✍️ **Writer**      | Assists with writing tasks like composing emails, summaries, or creative text.                                                                                    |
+| 💻 **Code**        | Helps with programming tasks, writing code, debugging, and explaining code snippets.                                                                                |
+| 📄 **Scanner**     | Scans and analyzes files and documents for information or insights.                                                                                                 |
+| 🖼️ **Vision**      | Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown.                       |
+| 📸 **Camera**      | Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'. |
+| 🧠 **Learning**    | Learns from interactions to improve responses and system performance over time.                                                                                     |
+| ☀️ **Weather**     | Fetches current weather conditions and forecasts for specified locations.                                                                                           |
+| ⏰ **Time**        | Provides the current date and time.                                                                                                                               |
+| ➕ **Calculator**  | Handles mathematical calculations and evaluates expressions.                                                                                                      |
+| 📧 **Email**       | Manages Gmail, checks for new emails, and can send emails.                                                                                                        |
+| 🖥️ **Screen**      | Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned. |
+| 🔗 **Limitless**   | Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions.                     |
+| 📚 *Get Last Sources* | (Internal Action) Retrieves and presents the sources for information recently provided by the search agent.                                                        |
+
 
 ## 🚀 Getting Started
 
@@ -121,81 +153,6 @@ You'll see a welcome message and a `You:` prompt.
     -   (Removed: No longer available)
 -   **Wake Word Detection (Picovoice Porcupine):**
     -   (Removed: No longer available)
-
-## 🛠️ Meet the Agents: Your Specialist Team
-
-The heart of the assistant is its modular agent system, orchestrated by the Master Agent.
-
-| Icon | Agent             | Description                                                                                                                               |
-| :--- | :---------------- | :---------------------------------------------------------------------------------------------------------------------------------------- |
-| 🎩   | **Master Agent**  | The conductor! Handles general chat, understands your intent, and routes tasks to the best specialist.                                      |
-| 💾   | **Memory Agent**  | Your personal archivist. Remembers personal info, preferences, and past conversations to tailor interactions. (Always active)              |
-| 🔍   | **Search Agent**  | Your window to the web. Performs intelligent searches for up-to-date information. (Requires Google API Key & CSE ID)                      |
-| ✍️   | **Writer Agent**  | Your personal wordsmith. Assists with composing emails, summaries, creative text, and more.                                               |
-| 💻   | **Code Agent**    | Your coding partner. Helps with programming tasks, writing code, debugging, and explaining code snippets.                                 |
-| 📸   | **Camera Agent**  | Your digital eyes. Captures images from your webcam (with permission) and uses the Vision Agent to describe them. (macOS may need permissions) |
-| 🖼️   | **Vision Agent**  | Your image interpreter. Analyzes and understands explicitly provided image files or paths.                                                |
-| 🖥️   | **Screen Agent**  | Your screen reader. Captures your live screen content and describes it using the Vision Agent. (macOS may need permissions)               |
-| 📄   | **Scanner Agent** | Your document analyst. Scans and analyzes files/documents for information (can be configured for vector embeddings).                      |
-| 🧠   | **Learning Agent**| The self-improver. Learns from interactions to enhance responses and system performance over time.                                       |
-| ☀️   | **Weather Agent** | Your local meteorologist. Fetches current weather conditions and forecasts. (Requires OpenWeatherMap API Key)                             |
-| ⏰   | **Time Agent**    | The timekeeper. Provides the current date and time.                                                                                       |
-| ➕   | **Calculator Agent**| The number cruncher. Handles mathematical calculations and evaluates expressions.                                                       |
-| 📧   | **Email Agent**   | Your mail assistant. Can connect to Gmail to check for new emails. (Requires setup/authorization, functionality may be evolving)        |
-| 😊   | **Personality Agent**| The empath. Analyzes interactions to understand and adapt to your personality and communication style.                                 |
-
-*(Agent availability can be configured in `config/settings.py` or `config/settings.json`)*
-
-## 🔬 Agent Capabilities in Detail
-
-Here's a closer look at what some key agents can do:
-
-### 🎩 Master Agent
-The Master Agent is the primary interface you interact with. It uses a powerful language model (OpenAI or Ollama) to:
--   Understand your queries in natural language.
--   Engage in general conversation and direct Q&A.
--   Determine the best specialized agent to handle a specific request based on its capabilities.
--   Present the specialist agent's findings to you in a cohesive, friendly manner.
-
-### 💾 Memory Agent
-This agent is crucial for making the assistant feel personal and aware.
--   **Stores Information**: You can explicitly tell the assistant things to remember about you, your family, preferences, or any facts. It can also learn some details implicitly.
--   **Retrieves Information**: When relevant, the assistant (via the Master Agent or other agents) can query the Memory Agent to recall stored information, making conversations more contextual and personalized (e.g., remembering your kids' names, your favorite hobbies, or a project you were working on).
--   **Data Storage**: Currently, memories are stored locally in `agent_memory.json` (ensure this is in `.gitignore`). The structure allows for different types of memories (facts, conversation summaries, etc.).
--   **Example**: *"Remember that my wife Kiki's birthday is on August 15th."* Later: *"When is Kiki's birthday?"*
-
-### 🔍 Search Agent
-Leverages Google Custom Search to find information online.
--   **Setup**: Requires `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` in your `.env` file.
--   **Functionality**: Takes your query, performs a web search, and then often uses its LLM to synthesize the search results into a concise answer. It can provide sources for its information.
--   **Example**: *"What are the latest developments in quantum computing?"*
-
-### ✍️ Writer Agent
-Your go-to for text generation and manipulation.
--   **Capabilities**: Can draft emails, write summaries of text, generate creative content (poems, stories), rewrite text in a different tone, and more.
--   **Example**: *"Write a short, friendly email to my team reminding them about the deadline on Friday."*
-
-### 💻 Code Agent
-Provides assistance with programming.
--   **Features**: Can generate code snippets in various languages, explain existing code, help debug, and answer programming-related questions.
--   **Example**: *"Write a Python function that takes a list of numbers and returns the sum of all even numbers in the list."*
-
-### 📸 Camera Agent & 🖼️ Vision Agent & 🖥️ Screen Agent
-These three agents work together for visual understanding:
--   **Vision Agent**: The core image analysis engine. It takes an image (from a file path, a live capture, or a screen grab) and a prompt, then uses a vision-capable LLM (like GPT-4.1 Vision with OpenAI, or a multi-modal Ollama model if configured) to describe or answer questions about the image.
--   **Camera Agent**: Uses your webcam to capture a live image. It then passes this image to the Vision Agent for analysis. *Requires webcam access and system permissions.*
-    -   **Example**: *"Can you see me with the camera and describe what I'm wearing?"*
--   **Screen Agent**: Captures your current computer screen. It then sends this screenshot to the Vision Agent for analysis. *Requires screen recording permissions.*
-    -   **Example**: *"Describe what's on my screen right now."* or *"Read the error message on my screen."*
-
-### ☀️ Weather Agent
-Provides weather forecasts using the OpenWeatherMap API.
--   **Setup**: Requires an `OPENWEATHERMAP_API_KEY` in your `.env` file.
--   **Functionality**: You can ask for the weather in a specific location. If you have a default location stored in memory (e.g., by telling the Memory Agent: *"Remember my default location is London."*), it can use that.
--   **Example**: *"What's the weather like in Paris today?"* or (if default is set) *"What's the weather like?"*
-
-*(More detailed sections for other agents can be added here as needed.)*
-
 
 ## 🤝 Contributing
 
