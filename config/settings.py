@@ -19,7 +19,7 @@ AGENT_SETTINGS = {
 
 # LLM Provider Settings
 LLM_PROVIDER_SETTINGS = {
-    "default_provider": "openai",  # "openai" or "ollama" - Defaulting to OpenAI for latest models
+    "default_provider": "ollama",  # "openai" or "ollama" - Defaulting to Ollama for local-first workflows
     "ollama_base_url": "http://localhost:11434",
     "ollama_default_model": "gemma3:4b-it-q4_K_M",  # User specified model
     "ollama_default_vision_model": "gemma3:4b-it-q4_K_M",  # Use gemma3:4b for vision
@@ -35,7 +35,7 @@ MODEL_SELECTOR_SETTINGS = {
     "reasoning_model": "o1",  # For complex logical reasoning and problem-solving
     "vision_model": "gpt-5",  # For image analysis and vision tasks
     "realtime_model": "gpt-realtime-mini-2025-10-06",  # For real-time audio conversations
-    "use_ollama_for_simple": False,  # Cost optimization - use local Ollama for simple tasks
+    "use_ollama_for_simple": True,  # Cost optimization - use local Ollama for simple tasks
     "complexity_threshold_tokens": {
         "simple": 50,  # Queries under 50 tokens are considered simple
         "complex": 100  # Queries over 100 tokens are considered complex

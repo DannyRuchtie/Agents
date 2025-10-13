@@ -2,7 +2,6 @@
 from typing import Any, Dict, Optional, List
 from datetime import datetime
 import os
-import sys # Added for streaming
 
 from config.openai_config import get_agent_config
 from config.settings import debug_print, LLM_PROVIDER_SETTINGS, MODEL_SELECTOR_SETTINGS
@@ -31,7 +30,19 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
         max_history: int = 10
     ):
         """Initialize the base agent."""
-        self.llm_provider = get_llm_provider()
+        self._provider_cache: Dict[str, Any] = {}
+        self.default_provider_name = LLM_PROVIDER_SETTINGS.get("default_provider", "openai")
+        self.last_response_streamed = False
+        try:
+            self.llm_provider = self._get_provider(self.default_provider_name)
+        except ImportError as provider_error:
+            fallback_provider = "openai"
+            if self.default_provider_name != fallback_provider:
+                print(f"[WARN] {self.default_provider_name.title()} provider unavailable ({provider_error}). Falling back to OpenAI.")
+                self.default_provider_name = fallback_provider
+                LLM_PROVIDER_SETTINGS["default_provider"] = fallback_provider
+                MODEL_SELECTOR_SETTINGS["use_ollama_for_simple"] = False
+            self.llm_provider = self._get_provider(fallback_provider)
         self.model_selector = get_model_selector()  # Initialize model selector
         self.config = get_agent_config(agent_type)
         self.system_prompt = system_prompt
@@ -47,6 +58,13 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             self.config["presence_penalty"] = 0.6  # Encourage more varied responses
         if "frequency_penalty" not in self.config:
             self.config["frequency_penalty"] = 0.5  # Discourage repetitive responses
+
+    def _get_provider(self, provider_name: str):
+        """Return a cached provider instance for the requested name."""
+        normalized_name = provider_name.lower()
+        if normalized_name not in self._provider_cache:
+            self._provider_cache[normalized_name] = get_llm_provider(normalized_name)
+        return self._provider_cache[normalized_name]
     
     def _is_image_path(self, text: str) -> bool:
         """Check if the text contains a valid image file path."""
@@ -86,9 +104,48 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             {"role": "system", "content": self.system_prompt},
             *self.conversation_history
         ]
+
+    async def _invoke_provider(
+        self,
+        provider,
+        messages: List[Dict[str, Any]],
+        config: Dict[str, Any],
+        provider_name: str
+    ) -> tuple[str, str]:
+        """Invoke an LLM provider and return its response text along with the provider used."""
+        assistant_response_parts: List[str] = []
+        stream = provider.stream_chat_completion(messages=messages, config=config)
+        async for content_chunk in stream:
+            if content_chunk is not None:
+                assistant_response_parts.append(content_chunk)
+        assistant_message = "".join(assistant_response_parts)
+        self.last_response_streamed = False  # Responses are surfaced later by the caller
+        return assistant_message, provider_name
+
+    def _should_retry_with_openai(self, response: str, provider_name: str) -> bool:
+        """Heuristic to decide if a local response should be retried with OpenAI."""
+        if provider_name != "ollama" or self.agent_type != "master":
+            return False
+
+        lower = response.lower().strip()
+        fallback_triggers = [
+            "i am a large language model",
+            "as a large language model",
+            "i'm a large language model",
+            "i am an ai language model",
+            "i'm an ai language model",
+            "i do not have access to personal",
+            "i don't have access to personal",
+            "i don't have personal knowledge",
+            "i do not have personal knowledge",
+            "i'm ready to be your ai assistant",
+            "i am ready to be your ai assistant"
+        ]
+        return any(trigger in lower for trigger in fallback_triggers)
     
     async def process(self, input_text: str, messages: Optional[List[Dict[str, str]]] = None, system_prompt_override: Optional[str] = None, **kwargs: Any) -> str:
         """Process the input text and return a response."""
+        self.last_response_streamed = False
         try:
             # Check if this is an image request and we're not already the vision agent
             if self.agent_type != "vision" and self._is_image_path(input_text):
@@ -103,7 +160,6 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
             # Handle common greetings more naturally
             if not messages and input_text.lower().strip() in ["hi", "hello", "hey", "good morning", "good afternoon", "good evening"]:
                 response_text = "Hey! Great to see you! How can I help you today? 😊"
-                print(response_text) # Print directly for simple non-LLM responses
                 return response_text
             
             # Use provided messages or build from context window
@@ -145,7 +201,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
                     prompt=input_text
                 )
                 debug_print(f"ModelSelector chose: {selected_model_info['model']} (complexity: {selected_model_info['complexity']})")
-            
+
             # Extract model configuration
             config = {
                 "temperature": kwargs.get("temperature", self.config.get("temperature", 0.7)),
@@ -175,22 +231,45 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
                 config.pop("temperature", None)
                 config.pop("response_format", None)  # Let API decide defaults for reasoning models
             
-            # Make the API call with streaming via the provider
-            stream = self.llm_provider.stream_chat_completion(
-                messages=current_messages,
-                config=config
-            )
-            
-            assistant_response_parts = []
-            async for content_chunk in stream:
-                if content_chunk is not None:
-                    sys.stdout.write(content_chunk)
-                    sys.stdout.flush()
-                    assistant_response_parts.append(content_chunk)
-            
-            sys.stdout.write("\n") # Add a newline after the streamed response is complete
+            # Determine provider for this request
+            provider_name = self.default_provider_name
+            if selected_model_info and selected_model_info.get("provider"):
+                provider_name = selected_model_info["provider"].lower()
 
-            assistant_message = "".join(assistant_response_parts)
+            try:
+                provider = self._get_provider(provider_name)
+            except Exception as provider_error:
+                debug_print(f"Falling back to default provider due to error with '{provider_name}': {provider_error}")
+                provider_name = self.default_provider_name
+                provider = self._get_provider(provider_name)
+                # If we fell back from a non-default provider, ensure model name matches provider
+                if selected_model_info and selected_model_info.get("provider") != provider_name:
+                    if provider_name == "openai":
+                        config["model"] = MODEL_SELECTOR_SETTINGS.get("simple_model", config.get("model"))
+
+            # Update cached provider reference for compatibility
+            self.llm_provider = provider
+
+            assistant_message, provider_name = await self._invoke_provider(
+                provider=provider,
+                messages=current_messages,
+                config=config,
+                provider_name=provider_name
+            )
+
+            if self._should_retry_with_openai(assistant_message, provider_name):
+                debug_print("BaseAgent: Local model response flagged as low quality. Retrying with OpenAI.")
+                fallback_provider = self._get_provider("openai")
+                fallback_config = config.copy()
+                # Ensure model aligns with OpenAI simple default
+                fallback_config["model"] = MODEL_SELECTOR_SETTINGS.get("simple_model", LLM_PROVIDER_SETTINGS.get("openai_default_model"))
+                assistant_message, provider_name = await self._invoke_provider(
+                    provider=fallback_provider,
+                    messages=current_messages,
+                    config=fallback_config,
+                    provider_name="openai"
+                )
+                self.llm_provider = fallback_provider
             
             # Only update conversation history if using standard input_text and not pre-defined messages
             # This logic might need refinement: if `messages` were passed (e.g. for routing), 
@@ -222,6 +301,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
         except Exception as e:
             error_message = f"I encountered an error: {str(e)}"
             print(error_message) # Print error as well
+            self.last_response_streamed = False
             return error_message
     
     def clear_history(self) -> None:

@@ -5,7 +5,7 @@ Based on: https://community.openai.com/t/automatic-model-selection-for-improved-
 
 import re
 from typing import Dict, Literal
-from config.settings import MODEL_SELECTOR_SETTINGS, debug_print
+from config.settings import MODEL_SELECTOR_SETTINGS, LLM_PROVIDER_SETTINGS, debug_print
 
 ComplexityLevel = Literal["simple", "moderate", "complex", "reasoning", "vision", "realtime"]
 
@@ -121,11 +121,20 @@ class ModelSelector:
         if complexity == "simple":
             # Option to use Ollama for cost savings
             if self.settings.get("use_ollama_for_simple", False):
-                model = {
-                    "provider": "ollama",
-                    "model": "gemma3:4b-it-q4_K_M",  # Or from settings
-                    "complexity": complexity
-                }
+                model_name = LLM_PROVIDER_SETTINGS.get("ollama_default_model")
+                if not model_name:
+                    debug_print("ModelSelector: ollama_default_model not set; falling back to OpenAI simple model")
+                    model = {
+                        "provider": "openai",
+                        "model": self.settings["simple_model"],
+                        "complexity": complexity
+                    }
+                else:
+                    model = {
+                        "provider": "ollama",
+                        "model": model_name,
+                        "complexity": complexity
+                    }
             else:
                 model = {
                     "provider": "openai",
@@ -245,4 +254,3 @@ def get_model_selector() -> ModelSelector:
     if _model_selector_instance is None:
         _model_selector_instance = ModelSelector()
     return _model_selector_instance
-

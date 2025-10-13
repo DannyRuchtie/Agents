@@ -168,7 +168,7 @@ class MasterAgent(BaseAgent):
 
 My primary goal is to understand {name}'s needs from his query and then decide the best course of action:
 1. If the query is conversational or something I can answer directly with my general knowledge and personality, I will do so.
-2. If the query requires a specific capability (like web search, weather forecast, image understanding, writing assistance, file scanning, screen description, or location-based services), I will identify the best specialized agent for the task and internally route the query to them. I will then present their response to {name} as if I performed the task myself.
+2. If the query requires a specific capability that one of our specialized agents handles, I will route the request internally and present the agent's response to {name} as if I performed the task myself.
 3. I will use the provided list of agents and their descriptions to make this routing decision. I must output the chosen agent's name clearly if I decide to delegate, for example: 'ROUTE: search'. If I handle it myself, I will just respond directly.
 
 I know {name} well - he's married to Kiki Koster Ruchtie and has two wonderful children, Lena and Tobias. {family_details}
@@ -209,6 +209,7 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
     
     async def process(self, query: str) -> str:
         """Process a user query by deciding whether to handle it directly or route to a specialist agent."""
+        self.last_response_streamed = False
         stripped_query = query.strip()
         if stripped_query.lower() in {"help", "commands", "menu"}:
             debug_print("MasterAgent: Help command detected, returning help text.")
@@ -235,6 +236,11 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
             history_context_for_routing = f"\nPrevious user query: \"{self.conversation_history[-1]['content']}\"\n"
 
         agent_options_str = "\n".join([f"- {name}: {desc}" for name, desc in self.agent_descriptions.items() if name in self.agents or name == 'master' or name == 'get_last_sources'])
+        allowed_routes = {"master"}
+        allowed_routes.update(self.agents.keys())
+        if "get_last_sources" in self.agent_descriptions:
+            allowed_routes.add("get_last_sources")
+        allowed_routes_display = ", ".join(sorted(allowed_routes))
         debug_print(f"MasterAgent: Agent options for routing LLM:\n{agent_options_str}")
 
         routing_prompt_addition = f"""
@@ -242,23 +248,15 @@ I avoid technical terms or explaining how I work explicitly to {name} - I just f
 And the available specialized agents/actions (carefully consider their descriptions and the user's exact wording):
 {agent_options_str}
 
-Which agent or action is best suited to handle this query? 
-Your primary goal is to determine the *single best* route.
+Allowed routes: {allowed_routes_display}
 
-Follow these rules for routing:
-1.  **Relevance Check**: If the query is nonsensical, abusive, clearly off-topic for a helpful AI assistant (e.g., asking for illegal activities, generating hate speech), or so vague that no agent can meaningfully act on it, respond with 'ROUTE: master'. I (MasterAgent) will then handle it with a polite refusal or ask for clarification.
-2.  **Direct MasterAgent Handling**: If the query is general conversation, a simple chat, a direct question I can answer with my existing knowledge and personality, or a direct follow-up to my immediately preceding response (see 'Assistant replied' context), respond with 'ROUTE: master'.
-3.  **Specific Agent Capabilities** (refer to their descriptions for keywords and typical queries):
-    *   'ROUTE: get_last_sources': If the query specifically asks for the sources, origin, or evidence for information I (MasterAgent, likely via SearchAgent) recently provided.
-    *   'ROUTE: email': If the query relates to managing emails (checking, sending, searching).
-    *   'ROUTE: browser': Use if the query involves interacting with a web browser, such as navigating to a URL, getting content from a specific webpage, taking a screenshot of a website (e.g., 'take screenshot of example.com', 'open google.com', 'summarize apple.com/news', 'get the text from wikipedia.org/XYZ'). This is for tasks targeting specific web addresses or web content, including taking screenshots of specific websites.
-    *   'ROUTE: screen': Use ONLY if the query asks to describe the user's ENTIRE CURRENT LIVE screen, or active window, WITHOUT specifying a website or URL (e.g., 'what am I looking at NOW?', 'describe my current desktop', 'read the text on my active window'). This implies capturing the general live display, not a specific web page.
-    *   'ROUTE: reminders': If the query involves managing Apple Reminders (adding, completing, deleting, or searching reminders).
-    *   'ROUTE: personality': If the query relates to understanding the user's communication style, personality traits, or preferences.
-    *   'ROUTE: [other_agent_name]': For other tasks, choose the most appropriate agent (e.g., search, memory) based on its description and the query's intent.
-4.  **Clarity**: If unsure between two specialized agents, briefly re-evaluate if 'ROUTE: master' can handle it. If not, pick the one that seems slightly more aligned.
+Routing rules:
+1.  If the query is nonsensical, abusive, clearly off-topic, or so vague that no agent can meaningfully act on it, respond with 'ROUTE: master'.
+2.  If the query is general conversation, a simple chat, or something I can answer directly, respond with 'ROUTE: master'.
+3.  Otherwise, choose the agent whose description best matches the query intent from the allowed routes above.
+4.  If none of the allowed routes fit, default to 'ROUTE: master'.
 
-Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'). Do not add any other text or explanation.
+Respond ONLY with the determined route in the exact format 'ROUTE: <route_name>'. Do not add any other text or explanation.
 """
         
         manual_route = self._manual_route_override(query)
@@ -271,6 +269,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             routing_stdout_buffer = io.StringIO()
             with redirect_stdout(routing_stdout_buffer):
                 raw_routing_decision = await super().process(routing_prompt_addition)
+                # Reset streaming flag set by routing call; this output is not shown to the user
+                self.last_response_streamed = False
 
             routed_stream_output = routing_stdout_buffer.getvalue().strip()
             if routed_stream_output:
@@ -292,6 +292,10 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             # For safety, assume intent was master if no clear route.
             llm_intended_route = "master"
 
+        if llm_intended_route not in allowed_routes:
+            debug_print(f"MasterAgent: LLM suggested unsupported route '{llm_intended_route}'. Defaulting to 'master'.")
+            llm_intended_route = "master"
+
         debug_print(f"MasterAgent: LLM intended route: '{llm_intended_route}'.")
 
         # --- Conversational Lead-ins & Execution ---
@@ -311,7 +315,8 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
             else:
                 final_response = "I can't seem to recall the sources from my last search right now."
             action_performed = True
-        
+            self.last_response_streamed = False
+
         elif llm_intended_route in self.agents:
             chosen_agent = self.agents[llm_intended_route]
             agent_name_friendly = llm_intended_route.replace("_", " ").title()
@@ -338,6 +343,7 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
 
             debug_print(f"MasterAgent routing to available agent '{llm_intended_route}' for query: {query}")
             agent_response = await chosen_agent.process(query)
+            self.last_response_streamed = getattr(chosen_agent, "last_response_streamed", False)
             action_performed = True
 
             # Frame the agent's response
@@ -372,6 +378,7 @@ Respond ONLY with the determined route (e.g., 'ROUTE: search' or 'ROUTE: master'
                 final_response = f"I tried to use my screen understanding skills for your query ('{query}'), but it seems that part of me is unavailable right now. This could be due to a configuration issue or macOS permissions for screen capture."
             else:
                 final_response = f"I thought about using a specialized part of my system called '{llm_intended_route}' for your query ('{query}'), but it's not currently available or enabled. How about we try something else?"
+            self.last_response_streamed = False
         
         # Ensure final_response is a string
         if not isinstance(final_response, str):

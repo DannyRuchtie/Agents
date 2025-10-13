@@ -110,14 +110,14 @@ Configuration is in `config/settings.py` under `MODEL_SELECTOR_SETTINGS`.
     ```
     
     **Important Notes:**
-    - The system uses OpenAI by default for LLM operations
+    - Lightweight prompts run through Ollama by default, with complex queries automatically escalated to OpenAI
     - BrowserAgent uses `gpt-4o` by default
     - All vision tasks use API-based models (no local vision models needed)
     - Mem0 uses OpenAI embeddings for semantic search
 
     **Important**: Never commit your `.env` file to version control. The `.gitignore` file should already be configured to ignore it.
 
-2.  **Ollama Setup (if using as your LLM provider):**
+2.  **Ollama Setup (for local/offline use):**
     -   Ensure the Ollama application is running locally.
     -   Pull your desired model. The default configured in the app for Ollama is `gemma3:4b-it-q4_K_M`, but you can change this in `config/settings.py` (`LLM_PROVIDER_SETTINGS["ollama_default_model"]`).
         ```bash
@@ -144,17 +144,17 @@ Configuration is in `config/settings.py` under `MODEL_SELECTOR_SETTINGS`.
 
 Navigate to the project's root directory in your terminal (ensure your virtual environment is activated).
 
--   **To run with the default LLM provider (OpenAI recommended for latest models):**
+-   **Local-first mode (default: Ollama for simple tasks):**
     ```bash
     python main.py
     ```
 
--   **To run with OpenAI (with auto model selection):**
+-   **Force OpenAI for every prompt (disables Ollama delegation):**
     ```bash
     python main.py --llm openai
     ```
 
--   **To run with Ollama (for local/offline use):**
+-   **Explicitly select Ollama as the base provider:**
     ```bash
     python main.py --llm ollama
     ```

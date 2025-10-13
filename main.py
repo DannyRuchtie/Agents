@@ -19,7 +19,8 @@ from config.settings import (
     SYSTEM_SETTINGS,
     save_settings,
     debug_print,
-    LLM_PROVIDER_SETTINGS
+    LLM_PROVIDER_SETTINGS,
+    MODEL_SELECTOR_SETTINGS
 )
 
 # --- STT Instance and Command Queue ---
@@ -185,7 +186,11 @@ async def process_input(master_agent: MasterAgent, user_input: str):
     # Process query
     debug_print(f"Final user_input to MasterAgent.process: {user_input!r}")
     response = await master_agent.process(user_input)
-    print(f"\nAssistant: {response}")
+    if getattr(master_agent, "last_response_streamed", False):
+        # Streaming already displayed the assistant's reply
+        pass
+    else:
+        print(f"\nAssistant: {response}")
     
     # Speak response if voice is enabled - THIS IS NOW HANDLED BY MasterAgent
     # if VOICE_SETTINGS["enabled"] and not user_input.lower().startswith("voice"):
@@ -211,9 +216,9 @@ def main():
     parser.add_argument(
         "--llm",
         type=str,
-        choices=["openai"],
-        default="openai",
-        help="(Deprecated) Only the OpenAI provider is available."
+        choices=["openai", "ollama"],
+        default=LLM_PROVIDER_SETTINGS.get("default_provider", "ollama"),
+        help="Select the default LLM provider ('ollama' for local, 'openai' for cloud)."
     )
     parser.add_argument(
         "--debug",
@@ -232,9 +237,10 @@ def main():
 
     # Update settings based on the command-line argument
     LLM_PROVIDER_SETTINGS["default_provider"] = args.llm
+    MODEL_SELECTOR_SETTINGS["use_ollama_for_simple"] = (args.llm == "ollama")
     SYSTEM_SETTINGS["debug_mode"] = args.debug
     save_settings() # Save the potentially updated setting
-    print("[INFO] Using LLM Provider: OPENAI")
+    print(f"[INFO] Using LLM Provider: {args.llm.upper()}")
     if args.debug:
         print("[INFO] Debug logging enabled.")
 
