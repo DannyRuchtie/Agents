@@ -159,6 +159,8 @@ Navigate to the project's root directory in your terminal (ensure your virtual e
     python main.py --llm ollama
     ```
 
+While running, type `reflect` (optionally `reflect 10`) to have the new Reflection Agent critique the recent conversation and suggest improvements.
+
 You'll see a welcome message and a `You:` prompt. The assistant will automatically select the best model for each request.
 
 ## 🗣️ Basic Usage

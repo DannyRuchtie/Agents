@@ -20,6 +20,7 @@ from config.help_text import HELP_TEXT
 from agents.base_agent import BaseAgent
 from agents.memory_agent import MemoryAgent
 from agents.search_agent import SearchAgent
+from agents.reflection_agent import ReflectionAgent
 from utils.voice import voice_output
 
 MASTER_SYSTEM_PROMPT = f"""I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
@@ -57,6 +58,7 @@ class MasterAgent(BaseAgent):
         debug_print("MasterAgent: Memory file loaded during initialization.")
 
         self.memory = MemoryAgent()  # Core memory agent
+        self.reflection_agent = ReflectionAgent()
         self.agents = {"memory": self.memory}
         self.agent_descriptions = {
             "master": "Handles general conversation, chat, and direct questions. Also acts as the primary router.",
@@ -96,6 +98,15 @@ class MasterAgent(BaseAgent):
 
         debug_print(f"Initialized {len(self.agents)} agents: {list(self.agents.keys())}")
         debug_print(f"Agent descriptions: {json.dumps(self.agent_descriptions, indent=2)}")
+
+    async def generate_reflection_report(self, turn_count: int = 12) -> str:
+        """Use the reflection agent to analyze recent conversation turns."""
+        if not self.conversation_history:
+            return "We haven't chatted yet—start a conversation first, then ask me to reflect."
+
+        trimmed_history = self.conversation_history[-turn_count:]
+        debug_print(f"MasterAgent: Sending last {len(trimmed_history)} messages to ReflectionAgent.")
+        return await self.reflection_agent.analyze(trimmed_history)
     
     # _load_memory_file method should be defined here or in BaseAgent if it was in previous context
     def _load_memory_file(self):

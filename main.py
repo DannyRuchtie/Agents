@@ -148,6 +148,21 @@ async def process_input(master_agent: MasterAgent, user_input: str):
         if VOICE_SETTINGS["enabled"]:
             voice_output.speak(HELP_TEXT)
         return
+
+    if user_input.lower().startswith("reflect"):
+        parts = user_input.split()
+        requested_turns = 6
+        if len(parts) > 1:
+            try:
+                requested_turns = max(1, int(parts[1]))
+            except ValueError:
+                print("\nAssistant: Please provide a number of turns like 'reflect 6', or use 'reflect' by itself.")
+                return
+
+        messages_to_review = requested_turns * 2
+        report = await master_agent.generate_reflection_report(turn_count=messages_to_review)
+        print(f"\nAssistant Reflection Report:\n{report}")
+        return
     
     # Check if the input is a file path and an image
     try:

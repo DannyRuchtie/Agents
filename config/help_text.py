@@ -7,6 +7,7 @@ Available Commands:
 Conversation:
 - help - Show this help message.
 - exit - Exit the assistant.
+- reflect [n] - Analyze the last n conversation turns (default 6) and suggest improvements.
 
 Voice Output (optional):
 - voice status - Show voice output status.
