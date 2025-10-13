@@ -53,17 +53,24 @@ class OpenAILLMProvider(BaseLLMProvider):
         # Ensure 'model' is in config, defaulting if necessary
         model_name = config.get("model", LLM_PROVIDER_SETTINGS.get("openai_default_model", "gpt-4.1-nano-2025-04-14"))
         
+        max_completion_tokens = config.get("max_completion_tokens")
+        if max_completion_tokens is None and "max_tokens" in config:
+            max_completion_tokens = config["max_tokens"]
+
         openai_config = {
             "model": model_name,
-            "temperature": config.get("temperature", 0.7),
-            "max_tokens": config.get("max_tokens", 4096),
-            "presence_penalty": config.get("presence_penalty", 0.6),
-            "frequency_penalty": config.get("frequency_penalty", 0.5),
+            "temperature": config.get("temperature"),
+            "presence_penalty": config.get("presence_penalty"),
+            "frequency_penalty": config.get("frequency_penalty"),
             "seed": config.get("seed"),
-            "response_format": config.get("response_format", {"type": "text"})
+            "response_format": config.get("response_format")
         }
+        if max_completion_tokens is not None:
+            openai_config["max_completion_tokens"] = max_completion_tokens
         # Filter out None values from config, as OpenAI API doesn't like None for some params
         openai_config = {k: v for k, v in openai_config.items() if v is not None}
+        # Remove legacy max_tokens key if present
+        config.pop("max_tokens", None)
 
 
         debug_print(f"OpenAILLMProvider: Streaming chat completion with config: {openai_config} and messages: {messages}")

@@ -2,67 +2,12 @@
   "agent_settings": {
     "memory": {
       "enabled": true,
-      "description": "Stores and retrieves conversation history and important information"
+      "use_mem0": false,
+      "description": "Stores and retrieves conversation history, personal information, and personality insights"
     },
     "search": {
       "enabled": true,
       "description": "Searches the web for current information"
-    },
-    "writer": {
-      "enabled": true,
-      "description": "Composes and summarizes text"
-    },
-    "code": {
-      "enabled": true,
-      "description": "Generates and explains code"
-    },
-    "scanner": {
-      "enabled": true,
-      "description": "Processes documents and creates vector embeddings"
-    },
-    "vision": {
-      "enabled": true,
-      "description": "Analyzes images and screen content"
-    },
-    "location": {
-      "enabled": true,
-      "description": "Provides location information and travel assistance"
-    },
-    "learning": {
-      "enabled": true,
-      "description": "Improves system through conversation monitoring"
-    },
-    "personality": {
-      "enabled": true,
-      "description": "Learns and adapts to user's personality and preferences"
-    },
-    "weather": {
-      "enabled": true,
-      "description": "Fetches weather forecasts from a local service"
-    },
-    "time": {
-      "enabled": true,
-      "description": "Provides the current date and time"
-    },
-    "screen": {
-      "enabled": true,
-      "description": "Captures the screen and uses VisionAgent to describe it"
-    },
-    "camera": {
-      "enabled": true,
-      "description": "Captures images from webcam and uses VisionAgent to describe them"
-    },
-    "reminders": {
-      "enabled": true,
-      "description": "Integrates with Apple Reminders to add, complete, delete, and search reminders."
-    },
-    "limitless": {
-      "enabled": true,
-      "description": "Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions."
-    },
-    "personality_agent": {
-      "enabled": true,
-      "description": "Learns and adapts to user's personality and preferences"
     }
   },
   "llm_provider_settings": {
@@ -70,7 +15,54 @@
     "ollama_base_url": "http://localhost:11434",
     "ollama_default_model": "gemma3:4b-it-q4_K_M",
     "ollama_default_vision_model": "gemma3:4b-it-q4_K_M",
-    "openai_default_model": "gpt-4.1-2025-04-14"
+    "openai_default_model": "gpt-4o-mini"
+  },
+  "model_selector_settings": {
+    "enabled": true,
+    "simple_model": "gpt-4o-mini",
+    "moderate_model": "gpt-5-mini",
+    "complex_model": "gpt-5",
+    "reasoning_model": "o1",
+    "vision_model": "gpt-5",
+    "realtime_model": "gpt-realtime-mini-2025-10-06",
+    "use_ollama_for_simple": false,
+    "complexity_threshold_tokens": {
+      "simple": 50,
+      "complex": 100
+    },
+    "complexity_keywords": {
+      "simple": [
+        "what is",
+        "define",
+        "who is",
+        "summary",
+        "summarize",
+        "example of",
+        "why is"
+      ],
+      "complex": [
+        "explain in detail",
+        "analyze",
+        "step by step",
+        "provide a detailed",
+        "calculate",
+        "prove",
+        "derive",
+        "compare",
+        "contrast",
+        "advantages",
+        "disadvantages"
+      ]
+    }
+  },
+  "mem0_settings": {
+    "enabled": false,
+    "user_id": "danny",
+    "embedding_model": "text-embedding-3-small",
+    "vector_store": "chroma",
+    "memory_decay_days": 90,
+    "max_memories_per_query": 10,
+    "similarity_threshold": 0.7
   },
   "personality_settings": {
     "humor_level": 0.8,
@@ -110,7 +102,7 @@
     }
   },
   "voice_settings": {
-    "enabled": true,
+    "enabled": false,
     "tts_provider": "openai",
     "openai_voice": "alloy",
     "openai_model": "tts-1",
@@ -123,6 +115,12 @@
       "nova",
       "shimmer"
     ],
+    "realtime_enabled": false,
+    "realtime_model": "gpt-realtime-mini-2025-10-06",
+    "realtime_voice": "alloy",
+    "audio_format": "pcm16",
+    "realtime_temperature": 0.8,
+    "realtime_max_tokens": 4096,
     "system_voice": "af_sarah",
     "available_system_voices": {
       "af": "Adult female voice",
@@ -137,13 +135,13 @@
       "bm_george": "British male voice (George)",
       "bm_lewis": "British male voice (Lewis)"
     },
-    "picovoice_access_key": "QS3qgAO5sCfcpzuanzWSj/sEYStU1R99+b7Lz"
+    "picovoice_access_key": null
   },
   "system_settings": {
     "os_type": "macos",
     "has_location_access": true,
     "has_screen_access": true,
     "debug_mode": false,
-    "app_path": "/Users/dannyruchtie/Documents/Github/Agents"
+    "app_path": "/Users/dannyruchtie/Documents/Agents"
   }
 }

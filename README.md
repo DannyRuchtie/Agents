@@ -2,49 +2,50 @@
 
 ## Project Overview
 
-I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents.
+I am Danny's personal AI assistant and close friend. I act as the primary interface and intelligent router for various specialized AI agents. Built with modern AI capabilities including:
+
+- 🧠 **Auto Model Selection** - Automatically selects the best AI model for your task
+- 💾 **Mem0 Integration** - Intelligent semantic memory that truly understands you
+- 🎙️ **Real-time Voice** - Natural voice conversations with GPT-4o Mini Realtime
+- 🔄 **Hybrid Memory** - JSON + Mem0 for reliable and intelligent memory
+- 🎯 **Streamlined Architecture** - Focused on core, high-quality agents
 
 
-## 🛠️ Meet the Agents: Your Specialist 
+## 🛠️ Meet the Agents: Your Specialists
 
 The heart of the assistant is its modular agent system, orchestrated by the Master Agent. Each agent has a specific role:
 
-| Agent Name      | Description                                                                                                                                                       |
-| :-------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🎩 **Master**      | Handles general conversation, chat, and direct questions. Also acts as the primary router.                                                                          |
-| 💾 **Memory**      | Manages and recalls personal information, preferences, and past conversation details. (Always Active)                                                               |
-| 😊 **Personality** | Analyzes interactions to understand and adapt to the user's personality and communication style.                                                                      |
-| 🔍 **Search**      | Performs general web searches to find information, answer questions, or discover websites when a specific URL is not provided. Example: 'What is the capital of France?'.                                                                                                      |
-| 🌐 **Browser**     | Interacts directly with specific websites. Navigates to URLs, takes screenshots, scrapes data from a given page, fills forms. Use if a URL is provided or a specific site action is requested (e.g., 'Go to example.com and take a screenshot', 'Scrape headlines from bbc.com/news'). Powered by `browser-use`. |
-| ✍️ **Writer**      | Assists with writing tasks like composing emails, summaries, or creative text.                                                                                    |
-| 📄 **Scanner**     | Scans and analyzes files and documents for information or insights.                                                                                                 |
-| 🖼️ **Vision**      | Analyzes and understands EXPLICITLY PROVIDED image files or image paths. Use if query contains an image path or refers to an image just shown.                       |
-| 📸 **Camera**      | Captures images using the webcam and describes them using VisionAgent. Use for queries like 'can you see me?', 'what do you see with the camera?', 'take a picture'. |
-| 🧠 **Learning**    | Learns from interactions to improve responses and system performance over time.                                                                                     |
-| ☀️ **Weather**     | Fetches current weather conditions and forecasts for specified locations.                                                                                           |
-| ⏰ **Time**        | Provides the current date and time.                                                                                                                               |
-| ➕ **Calculator**  | Handles mathematical calculations and evaluates expressions.                                                                                                      |
-| 📧 **Email**       | Manages Gmail, checks for new emails, and can send emails.                                                                                                        |
-| 🖥️ **Screen**      | Captures the user's CURRENT LIVE screen content and describes it. Use for queries like 'what am I looking at NOW?' or 'describe my CURRENT screen' when no image file is mentioned. |
-| 🔗 **Limitless**   | Connects to Limitless API to retrieve and summarize your lifelogs, allowing you to ask about your past activities, meetings, and interactions.                     |
-| 📚 *Get Last Sources* | (Internal Action) Retrieves and presents the sources for information recently provided by the search agent.                                                        |
-| ⏰ **Reminders**   | Integrates with Apple Reminders to add, complete, delete, and search reminders using natural language queries. |
+| Agent Name | Description                                                                                               |
+| :--------- | :-------------------------------------------------------------------------------------------------------- |
+| 🎩 **Master** | Handles conversation, keeps the personality prompt fresh, and routes queries to specialist agents.        |
+| 💾 **Memory** | JSON-backed long-term memory system for personal facts, preferences, and lightweight personality notes. |
+| 🔍 **Search** | Web search agent (Google Custom Search when keys are available, DuckDuckGo fallback otherwise).         |
+
+**Note:** Personality Agent has been **consolidated into Memory Agent**. All personality analysis and insights are now handled by the unified memory system.
+
+### 🎯 Auto Model Selection
+
+The system intelligently selects the best model for each task:
+
+- **Simple tasks** (definitions, basic queries): `gpt-4o-mini` - Fast and cost-effective
+- **Moderate tasks** (summaries, search synthesis): `gpt-5-mini` - Balanced performance
+- **Complex tasks** (deep analysis, multi-step): `gpt-5` - Maximum capability  
+- **Reasoning tasks** (logic problems, proofs): `o1` - Advanced reasoning
+- **Vision tasks** (image analysis, screenshots): `gpt-5` - Vision-enabled
+- **Real-time audio**: `gpt-realtime-mini-2025-10-06` - Low-latency voice ([GPT-4o Mini Realtime](https://platform.openai.com/docs/models/gpt-realtime-mini))
+
+Configuration is in `config/settings.py` under `MODEL_SELECTOR_SETTINGS`.
 
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
--   Python 3.11 or higher.
--   `pip` for installing Python packages.
--   **Environment Variables & API Keys (Crucial!):**
-    -   An **OpenAI API Key**: Required for the OpenAI LLM provider, embeddings, and the default Text-to-Speech (TTS) service.
-    -   **For Web Search (Search Agent):**
-        -   A Google API Key.
-        -   A Google Programmable Search Engine ID.
-    -   **For Weather Agent:**
-        -   An OpenWeatherMap API Key.
-    -   **macOS Specifics (for Camera/Screen Agents):** You may need to grant your terminal/Python application permission to access the camera and screen recording in `System Settings > Privacy & Security`.
+- Python 3.11 or higher.
+- `pip` for installing Python packages.
+- **Environment variables (in `.env`):**
+  - `OPENAI_API_KEY` (required).
+  - `GOOGLE_API_KEY` and `GOOGLE_CSE_ID` (optional—without them the assistant uses DuckDuckGo).
 
 ### Installation
 
@@ -66,20 +67,22 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     ```bash
     pip install -r requirements.txt
     ```
-    *(Ensure `ollama` is listed in `requirements.txt` if you plan to use it).*
     
-    **For Apple Reminders integration on macOS:**
-    ```bash
-    pip install pyobjc pyobjc-framework-EventKit
-    ```
-    *(These are included in requirements.txt, but you may need to grant permissions on first use.)*
-
+    **Key dependencies include:**
+    - `mem0ai` - Enhanced semantic memory system
+    - `pyaudio` - Real-time audio support
+    - `pyobjc` - Apple Reminders integration (macOS)
+    - `browser-use` - Web automation
+    - `ollama` (optional) - Local LLM support
+    
     **For Browser Agent (Web Automation):**
-    The `browser-use` library requires Playwright browsers. Install them by running:
+    Install Playwright browsers:
     ```bash
     playwright install chromium --with-deps
     ```
-    *(You can also install `firefox` or `webkit` if preferred, but `chromium` is commonly used. The `--with-deps` flag helps install necessary OS-level dependencies for Playwright browsers.)*
+    
+    **For Apple Reminders (macOS):**
+    Grant permissions in `System Settings > Privacy & Security > Reminders` on first use.
 
 ### Configuration
 
@@ -98,13 +101,19 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     GOOGLE_API_KEY="your_google_api_key_here"
     GOOGLE_CSE_ID="your_google_programmable_search_engine_id_here"
 
-    # For Weather Agent (OpenWeatherMap)
-    OPENWEATHERMAP_API_KEY="your_openweathermap_api_key_here"
-
-    #For getting yout Limitless AI lifelogs
-    LIMITLESS_API_KEY="your_limmitless_ai_api_key_here"
+    # For Gmail Integration (Email Agent)
+    GOOGLE_CLIENT_ID="your_google_client_id_here"
+    GOOGLE_CLIENT_SECRET="your_google_client_secret_here"
+    
+    # Optional: For Real-time Voice (if using custom endpoint)
+    # OPENAI_REALTIME_API_URL="wss://api.openai.com/v1/audio/speech/realtime"
     ```
-    **Important**: The `BrowserAgent` uses `langchain_openai` by default (specifically `gpt-4o` as configured in `agents/browser_agent.py`). Ensure your `OPENAI_API_KEY` is set in the `.env` file for the BrowserAgent to function.
+    
+    **Important Notes:**
+    - The system uses OpenAI by default for LLM operations
+    - BrowserAgent uses `gpt-4o` by default
+    - All vision tasks use API-based models (no local vision models needed)
+    - Mem0 uses OpenAI embeddings for semantic search
 
     **Important**: Never commit your `.env` file to version control. The `.gitignore` file should already be configured to ignore it.
 
@@ -121,28 +130,36 @@ The heart of the assistant is its modular agent system, orchestrated by the Mast
     You choose your LLM provider when running the assistant. The default is Ollama. See "Running the Assistant" below.
 
 4.  **Application Settings (`config/settings.py` & `config/settings.json`):**
-    Advanced settings like agent enablement, default LLM models for each provider, voice preferences (TTS provider, specific voice model), and personality traits are managed in `config/settings.py`. These settings are saved to and loaded from `config/settings.json` at runtime. You can modify `config/settings.json` directly for persistent changes, or edit the defaults in `config/settings.py` (which will apply if `config/settings.json` is missing or doesn't contain a specific setting).
+    
+    **Key Settings Sections:**
+    - `AGENT_SETTINGS` - Enable/disable individual agents
+    - `MODEL_SELECTOR_SETTINGS` - Configure auto model selection
+    - `MEM0_SETTINGS` - Configure semantic memory (user_id, embedding model, vector store)
+    - `VOICE_SETTINGS` - TTS and real-time audio configuration
+    - `PERSONALITY_TRAITS` - Customize communication style
+    
+    Settings are saved to `config/settings.json` at runtime. You can edit either file for persistent changes.
 
 ## 🚀 Running the Assistant
 
 Navigate to the project's root directory in your terminal (ensure your virtual environment is activated).
 
--   **To run with the default LLM provider (currently Ollama):**
+-   **To run with the default LLM provider (OpenAI recommended for latest models):**
     ```bash
     python main.py
     ```
 
--   **To explicitly specify Ollama:**
-    ```bash
-    python main.py --llm ollama
-    ```
-
--   **To run with OpenAI:**
+-   **To run with OpenAI (with auto model selection):**
     ```bash
     python main.py --llm openai
     ```
 
-You'll see a welcome message and a `You:` prompt.
+-   **To run with Ollama (for local/offline use):**
+    ```bash
+    python main.py --llm ollama
+    ```
+
+You'll see a welcome message and a `You:` prompt. The assistant will automatically select the best model for each request.
 
 ## 🗣️ Basic Usage
 
@@ -153,6 +170,16 @@ You'll see a welcome message and a `You:` prompt.
     -   Voice output is **disabled by default**.
     -   You can toggle it using commands like `voice on` / `voice off` (if implemented and recognized in `main.py`).
     -   The default TTS provider is OpenAI. Voice preferences (e.g., OpenAI voice model like "alloy", "nova") are set in `config/settings.py` under `VOICE_SETTINGS`.
+
+## 🧪 Evaluations
+
+Quickly validate the core agent flows (memory recall, search routing, and help command) with the bundled evaluation harness:
+
+```bash
+python3 -m evals.run_evals
+```
+
+Each scenario spins up a fresh `MasterAgent`, runs the prompt, and verifies the response for expected behavior. Extend `evals/run_evals.py` with additional cases to cover new agents or workflows.
 
 
 ## 🤝 Contributing
@@ -169,13 +196,34 @@ This project is typically licensed under the MIT License (but please verify the 
 
 
 
-## Security Notes
+## 🔐 Security & Privacy
 
-- API keys (OpenAI and Google) are stored locally in your .env file
-- All document processing happens on your machine (when using ollama)
-- Memory storage is local and under your control
-- Web access is configurable and can be restricted
-- Voice synthesis is performed by OpenAI TTS (optional)
+- **API Keys**: Stored locally in `.env` file (never committed)
+- **Memory**: Hybrid system - JSON files + Mem0 vector database, both local
+- **LLM Processing**: Choose between cloud (OpenAI) or local (Ollama)
+- **Web Access**: Configurable, only when explicitly requested
+- **Voice**: Optional TTS and real-time audio through OpenAI
+- **Permissions**: System-level permissions required for Reminders, Screen capture
+
+## 🆕 What's New in Version 2.0
+
+### Major Changes:
+- ✅ **Removed 9 deprecated agents** for cleaner architecture
+- ✅ **Auto Model Selector** - Intelligent model selection based on task complexity
+- ✅ **Mem0 Integration** - Semantic memory that truly understands context
+- ✅ **GPT-4o Mini Realtime** - Natural voice conversations with low latency
+- ✅ **API-Based Vision** - Screen and Browser agents now use direct API calls
+- ✅ **Enhanced Reminders** - Better NLP with LLM-powered intent extraction
+- ✅ **Latest Models** - Support for GPT-5, GPT-5-mini, O1, and Realtime Mini
+
+### Removed/Consolidated Agents:
+The following agents were removed or consolidated to streamline the system:
+- **Removed:** Calculator, Camera, Learning, Limitless, Scanner, Time, Vision, Weather, Writer (9 agents)
+- **Consolidated:** Personality Agent merged into Memory Agent (now handles both memories and personality)
+
+These capabilities are now handled by the Master Agent or integrated into remaining agents.
+
+**Total reduction:** From 17 agents to 7 core agents (-59% complexity)
 
 
 ## Contributing
@@ -188,4 +236,3 @@ This is an evolving project, and contributions are welcome! Whether it's adding 
 MIT License - See LICENSE file for details
 
 ---
-

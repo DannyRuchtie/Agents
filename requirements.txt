@@ -1,90 +1,21 @@
-langchain-core==0.1.53
-langchain-openai==0.1.5
-langchain-community==0.0.38
-langchain==0.1.20
-langchain-text-splitters>=0.0.1
+# ============================================================================
+# AI Agent System - Core Dependencies
+# Optimized and organized for maintainability
+# ============================================================================
+
+# === Core LLM ===
 openai==1.10.0
-ollama>=0.2.0
-httpx
-httpcore>=1.0.0
-python-dotenv==1.0.0
-duckduckgo-search>=4.1.1
-chromadb>=0.4.22
-watchdog>=3.0.0
-pyautogui>=0.9.54
-pytesseract>=0.3.10
-numpy>=1.24.0,<2
-pathlib>=1.0.1
-typing-extensions>=4.5.0
-python-dateutil>=2.8.2
+
+# === Networking & HTTP ===
+httpx>=0.28.1
 aiohttp>=3.9.1
-async-timeout>=4.0.3
-opencv-python>=4.8.0
-requests>=2.31.0
-geocoder>=1.38.1
-pygame>=2.5.0
-PyPDF2>=3.0.0
-click>=8.1.8
-future>=1.0.0
-ratelim>=0.1.6
-#kokoro-onnx>=0.2.6
-soundfile>=0.12.1
-filetype>=1.0.0
+
+# === Environment ===
+python-dotenv==1.0.0
+
+# === Web search & parsing ===
 beautifulsoup4>=4.9.3
-google-api-python-client
-google-auth-oauthlib
-google-auth-httplib2
-Flask
-readability-lxml
-html2text
-selenium
-webdriver-manager
-tiktoken
-# PyMuPDF
-fitz
-# Pillow (PIL)
-fastapi
-uvicorn
-pydantic
-hume
-sounddevice
-pvporcupine
-websockets
-elevenlabs
-SpeechRecognition
-# For local STT
-# For ElevenLabs TTS (Optional, if you add that provider)
-# elevenlabs
-# For Coqui TTS (Alternative local TTS, might require more setup)
-# TTS
-# For specific hardware acceleration if needed (check Whisper docs)
-# e.g., for NVIDIA GPUs
-# triton
-# For system tray icon (if you decide to implement it)
-# pystray
-# Additional for specific audio backends if PyAudio has issues on some systems
-# sounddevice
-# pyaudio # Already listed but ensure it\'s uncommented if needed
-pyobjc
-pyobjc-framework-EventKit
+ddgs>=9.6.0
 
-# Added for BrowserAgent
-browser-use>=0.2.5 # Specify a version or use latest
-# langchain-openai already listed above
-playwright>=1.40 # browser-use depends on Playwright
-
-# For local STT
-# For ElevenLabs TTS (Optional, if you add that provider)
-# elevenlabs
-# For Coqui TTS (Alternative local TTS, might require more setup)
-# TTS
-# For specific hardware acceleration if needed (check Whisper docs)
-# e.g., for NVIDIA GPUs
-# triton
-# For system tray icon (if you decide to implement it)
-# pystray
-# Additional for specific audio backends if PyAudio has issues on some systems
-# sounddevice
-# pyaudio # Already listed but ensure it\'s uncommented if needed
-# pyobjc
-# pyobjc-framework-EventKit 
+# === Optional playback (voice_output)
+pygame>=2.5.0

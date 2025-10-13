@@ -1,0 +1,34 @@
+[
+  {
+    "name": "greeting",
+    "prompt": "hi",
+    "description": "Assistant greets warmly and offers help.",
+    "expect_contains": ["great to see you", "help you today"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "personal_memory_name",
+    "prompt": "What is my name?",
+    "description": "Ensure Danny's name is recalled from memory.",
+    "expect_contains": ["Danny"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "search_request",
+    "prompt": "Search for me online",
+    "description": "Assistant should attempt a web search rather than refuse outright.",
+    "expect_contains": ["search"],
+    "forbid_contains": ["can't browse", "cannot browse"],
+    "min_length": 20
+  },
+  {
+    "name": "help_command",
+    "prompt": "help",
+    "description": "Help command returns the command list.",
+    "expect_contains": ["Available Commands"],
+    "forbid_contains": [],
+    "min_length": 20
+  }
+]

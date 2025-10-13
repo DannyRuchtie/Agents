@@ -1,38 +1,23 @@
 """Main module for the multi-agent chat interface."""
+import argparse
 import asyncio
 import os
-import sys
 import select
-import threading
-import argparse
+import sys
 from pathlib import Path
-from typing import Optional, List, Dict
+from typing import Optional
+
 from dotenv import load_dotenv
-import queue
 
 from agents.master_agent import MasterAgent
-from agents.memory_agent import MemoryAgent
-from agents.search_agent import SearchAgent
-from agents.writer_agent import WriterAgent
-# from agents.code_agent import CodeAgent
-from agents.scanner_agent import ScannerAgent
-from agents.vision_agent import VisionAgent
-from agents.learning_agent import LearningAgent
 from utils.voice import voice_output
 
 from config.paths_config import ensure_directories
+from config.help_text import HELP_TEXT
 from config.settings import (
-    AGENT_SETTINGS,
-    PERSONALITY_SETTINGS,
     VOICE_SETTINGS,
     SYSTEM_SETTINGS,
-    is_agent_enabled,
-    enable_agent,
-    disable_agent,
-    get_agent_status,
-    get_agent_info,
     save_settings,
-    is_debug_mode,
     debug_print,
     LLM_PROVIDER_SETTINGS
 )
@@ -158,76 +143,47 @@ async def process_input(master_agent: MasterAgent, user_input: str):
 
     # Check for help command
     if user_input.lower() == "help":
-        help_text = """\nAvailable Commands:
-Agent Management:
-- list agents - Show all available agents and their status
-- enable agent [name] - Enable a specific agent
-- disable agent [name] - Disable a specific agent
-
-Voice Output (TTS):
-- voice status - Show voice output status
-- voice on/enable - Enable voice output
-- voice off/disable - Disable voice output
-- voice stop/stop - Stop current speech
-- voice voice [name] - Change voice
-- voice speed [value] - Change voice speed (0.5-2.0)
-
-Speech Input (STT) & Wake Word:
-- speech on/enable - Enables general STT. If wake word is configured and enabled in settings, starts wake word listening.
-- speech off/disable - Disables wake word listening if active. General STT (for 'listen' command) might remain enabled based on settings.
-- speech status - Show STT and wake word status, including loaded models/keywords.
-- speech model <model_name> - Change Whisper STT model (e.g., tiny.en, base.en).
-- listen - Activate a one-time voice input using Whisper STT.
-  (Note: Configure wake word keywords, Picovoice AccessKey, and enable it in config/settings.py or .json)
-
-General:
-- help - Show this help message
-- exit - Exit the assistant
-"""
-        print(help_text)
+        print(HELP_TEXT)
         if VOICE_SETTINGS["enabled"]:
-            voice_output.speak(help_text)
+            voice_output.speak(HELP_TEXT)
         return
     
     # Check if the input is a file path and an image
     try:
-        print(f"[FORCE_PRINT_MAIN] Original user_input: '{user_input}'")
+        debug_print(f"Input handler received: {user_input!r}")
         # Normalize path (e.g., remove surrounding quotes if dragged from some terminals)
         normalized_input = user_input.strip('\'"')
-        print(f"[FORCE_PRINT_MAIN] Normalized input: '{normalized_input}'")
+        debug_print(f"Normalized input: {normalized_input!r}")
         
         is_file = os.path.isfile(normalized_input)
         exists = os.path.exists(normalized_input)
-        print(f"[FORCE_PRINT_MAIN] Path exists: {exists}, Is file: {is_file}")
+        debug_print(f"Path exists: {exists}, Is file: {is_file}")
 
         if exists and is_file:
-            print(f"[FORCE_PRINT_MAIN] Path is an existing file: '{normalized_input}'")
+            debug_print(f"Path is an existing file: {normalized_input!r}")
             # Check if it's a supported image type
             supported_extensions = ('.png', '.jpeg', '.jpg', '.gif', '.webp')
             is_image = normalized_input.lower().endswith(supported_extensions)
-            print(f"[FORCE_PRINT_MAIN] Is image type: {is_image}")
+            debug_print(f"Is image type: {is_image}")
 
             if is_image:
                 debug_print(f"Input detected as image file path: {normalized_input}") # This is the conditional one
-                print(f"[FORCE_PRINT_MAIN] Confirmed image file. Original query: '{user_input}'")
                 user_input = f"Analyze this image: {normalized_input}"
-                print(f"[FORCE_PRINT_MAIN] Transformed user_input for MasterAgent: '{user_input}'")
+                debug_print(f"Transformed user_input for MasterAgent: {user_input!r}")
             else:
                 debug_print(f"Input is a file, but not a recognized image type: {normalized_input}")
-                print(f"[FORCE_PRINT_MAIN] File exists, but not a supported image type: '{normalized_input}'")
         elif '/' in user_input or '\\\\' in user_input: 
-            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' looks like a path but does not exist as a file or is not a file.")
+            debug_print(f"Input looks like a path but does not exist as a file or is not a file: {user_input!r}")
             pass
         else:
-            print(f"[FORCE_PRINT_MAIN] Input '{user_input}' does not appear to be a file path.")
+            debug_print(f"Input does not appear to be a file path: {user_input!r}")
 
     except Exception as e:
         debug_print(f"Error during file path check: {e}")
-        print(f"[FORCE_PRINT_MAIN] Exception during file path check: {e}")
         # Proceed with original input if error in path checking
 
     # Process query
-    print(f"[FORCE_PRINT_MAIN] Final user_input to MasterAgent.process: '{user_input}'")
+    debug_print(f"Final user_input to MasterAgent.process: {user_input!r}")
     response = await master_agent.process(user_input)
     print(f"\nAssistant: {response}")
     
@@ -245,26 +201,42 @@ def main():
     # If main.py is in a subdirectory like 'src', and .env is in the project root, adjust accordingly:
     # env_path = script_dir.parent / ".env"
     
-    print(f"[DEBUG] Attempting to load .env file from: {env_path}")
-    # Load .env, override existing env vars if any, and be verbose if file not found
-    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=True)
-    print(f"[DEBUG] load_dotenv successful: {loaded_successfully}")
+    debug_print(f"Attempting to load .env file from: {env_path}")
+    # Load .env, override existing env vars if any
+    loaded_successfully = load_dotenv(dotenv_path=env_path, override=True, verbose=False)
+    debug_print(f"load_dotenv successful: {loaded_successfully}")
 
     # Argument parsing for LLM provider
     parser = argparse.ArgumentParser(description="Run the AI Assistant with a specified LLM provider.")
     parser.add_argument(
         "--llm",
         type=str,
-        choices=["openai", "ollama"],
-        default=LLM_PROVIDER_SETTINGS["default_provider"],
-        help="Specify the LLM provider to use (openai or ollama). Defaults to ollama."
+        choices=["openai"],
+        default="openai",
+        help="(Deprecated) Only the OpenAI provider is available."
     )
+    parser.add_argument(
+        "--debug",
+        dest="debug",
+        action="store_true",
+        help="Enable verbose debug logging."
+    )
+    parser.add_argument(
+        "--no-debug",
+        dest="debug",
+        action="store_false",
+        help="Disable verbose debug logging."
+    )
+    parser.set_defaults(debug=False)
     args = parser.parse_args()
 
-    # Update the setting based on the command-line argument
+    # Update settings based on the command-line argument
     LLM_PROVIDER_SETTINGS["default_provider"] = args.llm
+    SYSTEM_SETTINGS["debug_mode"] = args.debug
     save_settings() # Save the potentially updated setting
-    print(f"[INFO] Using LLM Provider: {args.llm.upper()}")
+    print("[INFO] Using LLM Provider: OPENAI")
+    if args.debug:
+        print("[INFO] Debug logging enabled.")
 
     # ---- TEMPORARY DEBUG ----
     # loaded_google_api_key = os.getenv("GOOGLE_API_KEY")

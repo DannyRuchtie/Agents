@@ -5,8 +5,9 @@ import os
 import sys # Added for streaming
 
 from config.openai_config import get_agent_config
-from config.settings import debug_print, LLM_PROVIDER_SETTINGS
+from config.settings import debug_print, LLM_PROVIDER_SETTINGS, MODEL_SELECTOR_SETTINGS
 from agents.llm_providers import get_llm_provider
+from agents.model_selector import get_model_selector
 
 # Image file extensions that should be routed to vision agent
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'}
@@ -31,6 +32,7 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
     ):
         """Initialize the base agent."""
         self.llm_provider = get_llm_provider()
+        self.model_selector = get_model_selector()  # Initialize model selector
         self.config = get_agent_config(agent_type)
         self.system_prompt = system_prompt
         self.max_history = max_history
@@ -134,21 +136,44 @@ I should sound like a friend who's knowledgeable but approachable, always ready 
                 current_messages.extend(self.conversation_history)
                 current_messages.append({"role": "user", "content": input_text})
             
+            # Use ModelSelector to intelligently choose the model (unless overridden)
+            selected_model_info = None
+            if "model" not in kwargs and MODEL_SELECTOR_SETTINGS.get("enabled", True):
+                # Auto-select model based on task complexity
+                selected_model_info = self.model_selector.get_model_for_agent(
+                    agent_type=self.agent_type,
+                    prompt=input_text
+                )
+                debug_print(f"ModelSelector chose: {selected_model_info['model']} (complexity: {selected_model_info['complexity']})")
+            
             # Extract model configuration
             config = {
-                # "model": kwargs.get("model", self.config.get("model")), # Allow model override, provider will use its default if None
-                # Let the provider determine the model based on its defaults or kwargs passed to process
                 "temperature": kwargs.get("temperature", self.config.get("temperature", 0.7)),
-                "max_tokens": kwargs.get("max_tokens", self.config.get("max_tokens", 4096)),
                 "seed": kwargs.get("seed", self.config.get("seed")),
                 "response_format": kwargs.get("response_format", self.config.get("response_format")) # Let provider handle default if None
             }
-            # Add model from kwargs if explicitly passed to process, otherwise provider handles it
+            # Allow callers to explicitly limit completions without enforcing defaults
+            if "max_completion_tokens" in kwargs:
+                config["max_completion_tokens"] = kwargs["max_completion_tokens"]
+            elif "max_tokens" in kwargs:
+                config["max_completion_tokens"] = kwargs["max_tokens"]
+            elif "max_completion_tokens" in self.config:
+                config["max_completion_tokens"] = self.config["max_completion_tokens"]
+            
+            # Add model - priority: kwargs > model_selector > provider default
             if "model" in kwargs:
                 config["model"] = kwargs["model"]
+            elif selected_model_info:
+                config["model"] = selected_model_info["model"]
             
             # Filter out None values from config to avoid sending them if not set
             config = {k: v for k, v in config.items() if v is not None}
+
+            model_name = config.get("model", "")
+            if model_name and model_name.lower().startswith("o"):
+                # Reasoning models like o1 only allow default temperature/penalties
+                config.pop("temperature", None)
+                config.pop("response_format", None)  # Let API decide defaults for reasoning models
             
             # Make the API call with streaming via the provider
             stream = self.llm_provider.stream_chat_completion(

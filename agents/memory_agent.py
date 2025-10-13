@@ -6,7 +6,9 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from .base_agent import BaseAgent
 from config.paths_config import get_path, AGENTS_DOCS_DIR
-from config.settings import debug_print
+from config.settings import debug_print, MEM0_SETTINGS
+
+MEM0_ENABLED = False
 
 MEMORY_SYSTEM_PROMPT = """You are an AI assistant specialized in managing user-specific information (memories).
 Your primary task is to understand user requests to STORE, RETRIEVE, UPDATE, or DELETE information from various categories.
@@ -79,6 +81,9 @@ class MemoryAgent(BaseAgent):
         self.memory_file = AGENTS_DOCS_DIR / "memory.json"
         AGENTS_DOCS_DIR.mkdir(parents=True, exist_ok=True)
         self.memories = self._load_memories()
+        
+        self.mem0 = None
+        self.use_mem0 = False
 
     def _load_memories(self) -> Dict[str, Any]:
         """Loads memories from the JSON file, ensuring default structure."""
@@ -134,7 +139,10 @@ class MemoryAgent(BaseAgent):
             debug_print(f"MemoryAgent: Error saving memories to {self.memory_file}: {str(e)}")
 
     async def store_memory_entry(self, category: str, information: str, subcategory: Optional[str] = None, key_identifier: Optional[str] = None) -> str:
-        """Stores a new memory entry into the specified category/subcategory."""
+        """Stores a new memory entry into the specified category/subcategory.
+        
+        Hybrid approach: Stores in both JSON (for backward compatibility) and Mem0 (for semantic search).
+        """
         debug_print(f"MemoryAgent: Storing memory - Category: {category}, Subcategory: {subcategory}, Info: '{information[:50]}...', Key: {key_identifier}")
         timestamp = datetime.now().isoformat()
         
@@ -150,7 +158,7 @@ class MemoryAgent(BaseAgent):
             "type": entry_type,
             "key_identifier": key_identifier
         }
-
+        
         # Ensure category exists and is of the correct type
         if category not in self.memories or \
            (isinstance(self.memories[category], dict) and subcategory is None) or \
@@ -195,9 +203,10 @@ class MemoryAgent(BaseAgent):
             return f"Error: Could not find a valid place to store memory in category '{category}'{subcategory_text}."
 
     async def retrieve_memory_entries(self, category: Optional[str] = None, query: Optional[str] = None, subcategory: Optional[str] = None, key_identifier: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
-        """Retrieves memory entries, with optional filtering and basic keyword matching."""
+        """Retrieve memory entries with optional filtering."""
         debug_print(f"MemoryAgent: Retrieving memory - Category: {category}, Subcategory: {subcategory}, Query: '{query}', Key: {key_identifier}, Limit: {limit}")
         
+        # Keyword search within JSON memories
         source_lists = []
         if category:
             if category not in self.memories:
@@ -259,7 +268,13 @@ class MemoryAgent(BaseAgent):
                     all_matching_entries.append(entry)
 
         # Sort by timestamp (most recent first) and apply limit
-        return sorted(all_matching_entries, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+        json_results = sorted(all_matching_entries, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+        
+        # Mark source as JSON for these results
+        for result in json_results:
+            result["source"] = "json"
+        
+        return json_results
 
     async def process(self, query: str) -> str:
         debug_print(f"MemoryAgent received natural language query: {query}")
@@ -348,13 +363,154 @@ class MemoryAgent(BaseAgent):
             debug_print(traceback.format_exc())
             return f"I encountered an unexpected issue while trying to process your memory request: {str(e)}"
 
+    def get_relevant_context(self, query: str, limit: int = 5) -> str:
+        """Get contextually relevant memories as formatted string for prompt injection.
+        
+        This uses Mem0's semantic search to find relevant context for the current query.
+        Useful for injecting relevant memories into agent prompts.
+        
+        Args:
+            query: The current query/conversation context
+            limit: Maximum number of memories to include
+            
+        Returns:
+            str: Formatted string of relevant memories
+        """
+        if not query:
+            return ""
+
+        words = set(query.lower().split())
+        matches: List[Dict[str, Any]] = []
+
+        for category_data in self.memories.values():
+            candidates = []
+            if isinstance(category_data, list):
+                candidates.extend(category_data)
+            elif isinstance(category_data, dict):
+                for sub_list in category_data.values():
+                    if isinstance(sub_list, list):
+                        candidates.extend(sub_list)
+
+            for entry in candidates:
+                if not isinstance(entry, dict):
+                    continue
+                content = entry.get("content", "").lower()
+                if any(word in content for word in words):
+                    matches.append(entry)
+
+        matches = sorted(matches, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]
+        if not matches:
+            return ""
+
+        formatted = []
+        for entry in matches:
+            timestamp = entry.get("timestamp", "")
+            content = entry.get("content", "")
+            formatted.append(f"[{timestamp}] {content}".strip())
+        return "\n".join(formatted)
+    
+    # ========================================================================
+    # PERSONALITY MANAGEMENT (Consolidated from PersonalityAgent)
+    # ========================================================================
+    
+    async def store_personality_insight(self, insight: str, category: str = "general", 
+                                       traits: Optional[Dict[str, Any]] = None) -> str:
+        """Store personality-related insight with special metadata.
+        
+        This consolidates personality functionality into the memory system.
+        Personality insights are just specialized memories with 'personality' type.
+        
+        Args:
+            insight: The personality insight text
+            category: Category of insight (communication_style, interests, preferences, etc.)
+            traits: Optional dict of trait values (formality, verbosity, humor, etc.)
+            
+        Returns:
+            str: Confirmation message
+        """
+        if traits:
+            trait_summary = ", ".join(f"{k}: {v}" for k, v in traits.items())
+            information = f"{insight} (traits: {trait_summary})"
+        else:
+            information = insight
+
+        return await self.store_memory_entry(
+            category="personality",
+            information=information,
+            subcategory=category
+        )
+    
+    async def get_personality_insights(self, category: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+        """Retrieve personality insights from memory.
+        
+        Args:
+            category: Optional category filter (communication_style, interests, etc.)
+            limit: Maximum number of insights to return
+            
+        Returns:
+            List of personality insight entries
+        """
+        # JSON fallback
+        return await self.retrieve_memory_entries(
+            category="personality",
+            subcategory=category,
+            limit=limit
+        )
+    
+    async def analyze_and_store_interaction(self, user_input: str, assistant_response: str) -> None:
+        """Analyze an interaction for personality insights and store them.
+        
+        This replaces PersonalityAgent.analyze_interaction functionality.
+        
+        Args:
+            user_input: What the user said
+            assistant_response: How the assistant responded
+        """
+        try:
+            from datetime import datetime
+            import re
+            
+            # Analyze communication style
+            insights = []
+            
+            # Formality detection
+            if any(word in user_input.lower() for word in ["please", "thank you", "kindly", "would you"]):
+                insights.append("User prefers polite, formal communication")
+            elif any(word in user_input.lower() for word in ["hey", "yo", "sup", "yeah", "nah"]):
+                insights.append("User prefers casual, informal communication")
+            
+            # Verbosity preference
+            if len(user_input.split()) > 50:
+                insights.append("User provides detailed, verbose queries")
+            elif len(user_input.split()) < 10:
+                insights.append("User prefers brief, concise communication")
+            
+            # Interest detection (simple keyword extraction)
+            keywords = re.findall(r'\b(?:interested in|learning about|working on|studying)\s+(\w+(?:\s+\w+){0,2})', 
+                                 user_input.lower())
+            if keywords:
+                for keyword in keywords:
+                    insights.append(f"Shows interest in: {keyword}")
+            
+            # Store each insight
+            for insight in insights:
+                await self.store_personality_insight(
+                    insight=insight,
+                    category="communication_analysis"
+                )
+            
+            debug_print(f"MemoryAgent: Stored {len(insights)} personality insights from interaction")
+            
+        except Exception as e:
+            debug_print(f"MemoryAgent: Error analyzing interaction: {str(e)}")
+    
     # --- Potentially deprecate or refine older direct methods if process() becomes robust --- 
-    async def store(self, category: str, information: str, subcategory: str | None = None) -> str:
+    async def store(self, category: str, information: str, subcategory: Optional[str] = None) -> str:
         """Directly store information. Consider using 'process' for NL queries."""
         debug_print(f"MemoryAgent: Direct store called - Category: {category}, Subcategory: {subcategory}, Info: '{information[:50]}...'")
         return await self.store_memory_entry(category, information, subcategory)
 
-    async def retrieve(self, category: Optional[str] = None, query: str | None = None, subcategory: str | None = None, limit: int = 5) -> List[Dict[str, Any]]:
+    async def retrieve(self, category: Optional[str] = None, query: Optional[str] = None, subcategory: Optional[str] = None, limit: int = 5) -> List[Dict[str, Any]]:
         """Directly retrieve information. Consider using 'process' for NL queries."""
         debug_print(f"MemoryAgent: Direct retrieve called - Category: {category}, Subcategory: {subcategory}, Query: '{query}'")
         return await self.retrieve_memory_entries(category, query, subcategory, limit=limit)

@@ -90,7 +90,6 @@ DEFAULT_MODEL = "gpt-4.1-2025-04-14"  # Using GPT-4.1 model
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "model": DEFAULT_MODEL,
-    "max_tokens": 300,
     "temperature": 0.7,
 }
 
@@ -105,7 +104,7 @@ AGENT_CONFIGS = {
         "seed": 456
     },
     "search": {
-        "temperature": 0.2,
+        "temperature": 1.0,
         "seed": 789
     },
     "writer": {
@@ -119,7 +118,6 @@ AGENT_CONFIGS = {
     "vision": {
         "model": "gpt-4.1-2025-04-14",  # Using GPT-4.1 for vision tasks
         "temperature": 0.2,
-        "max_tokens": 300,
         "seed": 987
     }
 }

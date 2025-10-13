@@ -1,11 +1,21 @@
 """Search agent module for web search functionality."""
 import os
-from typing import List, Dict, Optional
+from typing import List, Optional, Callable, Any
 import aiohttp
 from urllib.parse import quote_plus
 from bs4 import BeautifulSoup
 import asyncio
 import ssl
+
+try:
+    from ddgs import AsyncDDGS  # type: ignore
+except ImportError:
+    AsyncDDGS = None  # type: ignore
+
+try:
+    from ddgs import DDGS  # type: ignore
+except ImportError:
+    DDGS = None  # type: ignore
 
 from .base_agent import BaseAgent
 from config.settings import debug_print
@@ -24,7 +34,7 @@ class SearchResult:
         return f"Title: {self.title}\nSnippet: {self.snippet}\nLink: {self.link}\n"
 
 class SearchAgent(BaseAgent):
-    """Agent for web search functionality using Google Custom Search."""
+    """Agent for web search functionality using Google Custom Search or DuckDuckGo fallback."""
     
     def __init__(self):
         """Initialize the Search Agent."""
@@ -37,6 +47,7 @@ class SearchAgent(BaseAgent):
         # Get Google API credentials
         self.google_api_key = os.getenv("GOOGLE_API_KEY")
         self.search_engine_id = os.getenv("GOOGLE_CSE_ID") # Corrected to GOOGLE_CSE_ID
+        self.use_duckduckgo = not (self.google_api_key and self.search_engine_id)
 
         # ---- TEMPORARY HARDCODED DEBUG ----
         # self.google_api_key = "AIzaSyCSxVQZ1Tz0H_f3ufP34__8cimx-sYncik" 
@@ -45,12 +56,13 @@ class SearchAgent(BaseAgent):
         # print(f"[SEARCH_AGENT_DEBUG] Using HARDCODED GOOGLE_CSE_ID: {self.search_engine_id}")
         # ---- END TEMPORARY HARDCODED DEBUG ----
         
-        if not self.google_api_key or not self.search_engine_id:
-            # This warning will now trigger if .env isn't loaded properly
-            debug_print("SearchAgent: WARNING - Google API key or Search Engine ID not found via os.getenv. Search functionality will be limited or fail.")
+        if self.use_duckduckgo:
+            debug_print("SearchAgent: Google credentials missing; defaulting to DuckDuckGo search.")
+        else:
+            debug_print("SearchAgent: Google Custom Search configured with provided credentials.")
     
     async def search(self, query: str, num_results: int = 5) -> List[SearchResult]:
-        """Perform a web search using Google Custom Search API.
+        """Perform a web search using Google Custom Search API or DuckDuckGo fallback.
         
         Args:
             query: The search query
@@ -62,10 +74,11 @@ class SearchAgent(BaseAgent):
         Raises:
             Exception: If the API request fails or returns an error.
         """
-        if not self.google_api_key or not self.search_engine_id:
-            debug_print("SearchAgent: GOOGLE_API_KEY or GOOGLE_SEARCH_ENGINE_ID is not set.")
-            raise Exception("Search agent is not configured. Missing Google API key or Search Engine ID.")
+        if self.use_duckduckgo:
+            return await self._search_duckduckgo(query, num_results)
+        return await self._search_google(query, num_results)
 
+    async def _search_google(self, query: str, num_results: int = 5) -> List[SearchResult]:
         try:
             # Ensure num_results is within bounds
             num_results = min(max(1, num_results), 10)
@@ -129,6 +142,50 @@ class SearchAgent(BaseAgent):
             if isinstance(e, Exception) and e.args and "Search agent is not configured" in e.args[0]:
                 raise
             raise Exception(f"An unexpected error occurred in search: {str(e)}")
+
+    async def _search_duckduckgo(self, query: str, num_results: int = 5) -> List[SearchResult]:
+        """Perform a web search using DuckDuckGo (no API key required)."""
+        debug_print(f"SearchAgent: Using DuckDuckGo fallback for query '{query}'")
+        results: List[SearchResult] = []
+        try:
+            # AsyncDDGS handles up to 50 results; cap to num_results
+            max_results = min(max(1, num_results), 10)
+            if AsyncDDGS is not None:
+                async with AsyncDDGS() as ddgs:
+                    async for item in ddgs.atext(query, max_results=max_results):
+                        title = item.get("title") or item.get("body") or ""
+                        link = item.get("href") or ""
+                        snippet = item.get("body") or ""
+                        if not link:
+                            continue
+                        results.append(SearchResult(title=title, link=link, snippet=snippet))
+                        if len(results) >= max_results:
+                            break
+            elif DDGS is not None:
+                def _run_sync_search() -> List[Any]:
+                    sync_results: List[Any] = []
+                    with DDGS() as ddgs:
+                        for item in ddgs.text(query, max_results=max_results):
+                            sync_results.append(item)
+                            if len(sync_results) >= max_results:
+                                break
+                    return sync_results
+
+                sync_items = await asyncio.to_thread(_run_sync_search)
+                for item in sync_items:
+                    title = item.get("title") or item.get("body") or ""
+                    link = item.get("href") or ""
+                    snippet = item.get("body") or ""
+                    if not link:
+                        continue
+                    results.append(SearchResult(title=title, link=link, snippet=snippet))
+            else:
+                raise RuntimeError("ddgs package is installed but no compatible search interface was found.")
+        except Exception as e:
+            debug_print(f"SearchAgent: DuckDuckGo fallback failed: {e}")
+            return []
+
+        return results
     
     async def _fetch_and_extract_text(self, url: str, session: aiohttp.ClientSession) -> Optional[str]:
         """Fetch HTML content from a URL and extract clean text, with retries."""
@@ -212,7 +269,11 @@ class SearchAgent(BaseAgent):
         return "\n".join(formatted)
     
     async def process(self, query: str) -> str:
-        """Process a search query, fetch content from up to top 5 results, and provide a summary."""
+        """Process a search query, fetch content from up to top 5 results, and provide a summary.
+        
+        Note: The model selector will automatically choose the appropriate model based on
+        query complexity (simple searches use gpt-4o-mini, complex ones use gpt-5-mini or gpt-5).
+        """
         debug_print(f"SearchAgent: Processing query: '{query}'")
         NUM_RESULTS_TO_PROCESS = 5
         MAX_TOTAL_TEXT_CHARS = 24000 # Max combined chars from all pages for LLM

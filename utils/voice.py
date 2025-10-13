@@ -7,7 +7,13 @@ import tempfile
 import threading
 import queue
 from pathlib import Path
-import pygame # For audio playback
+try:
+    import pygame  # For audio playback
+    PYGAME_AVAILABLE = True
+except ImportError:
+    pygame = None  # type: ignore[assignment]
+    PYGAME_AVAILABLE = False
+    print("Warning: pygame not installed. Voice output will be disabled.")
 from openai import OpenAI # For TTS API
 import time
 from typing import Optional
@@ -34,12 +40,16 @@ class VoiceOutput:
         self.audio_queue = queue.Queue()
         self.worker_thread = None
         
-        try:
-            pygame.mixer.init()
-            debug_print("Pygame mixer initialized for audio playback.")
-        except Exception as e:
-            debug_print(f"Error initializing pygame mixer: {e}. Voice output will be silent.")
-            self.client = None # Disable if pygame fails
+        if not PYGAME_AVAILABLE or pygame is None:
+            debug_print("Pygame not available. Voice output disabled.")
+            self.client = None
+        else:
+            try:
+                pygame.mixer.init()
+                debug_print("Pygame mixer initialized for audio playback.")
+            except Exception as e:
+                debug_print(f"Error initializing pygame mixer: {e}. Voice output will be silent.")
+                self.client = None # Disable if pygame fails
 
         if self.client:
             self.worker_thread = threading.Thread(target=self._process_audio_queue, daemon=True)
@@ -47,6 +57,10 @@ class VoiceOutput:
             debug_print("VoiceOutput initialized with OpenAI TTS provider.")
         else:
             debug_print("OpenAI client not available or pygame mixer failed. VoiceOutput disabled.")
+
+    def _mixer_ready(self) -> bool:
+        """Return True if pygame mixer is available and initialized."""
+        return bool(PYGAME_AVAILABLE and pygame is not None and pygame.mixer.get_init())
 
     def _generate_speech_file(self, text: str, temp_file_path: Path) -> bool:
         if not self.client:
@@ -66,7 +80,7 @@ class VoiceOutput:
             return False
 
     def _play_audio_file(self, file_path: Path):
-        if not pygame.mixer.get_init():
+        if not self._mixer_ready():
             debug_print("Pygame mixer not initialized. Cannot play audio.")
             return
 
@@ -78,7 +92,8 @@ class VoiceOutput:
             
             while pygame.mixer.music.get_busy():
                 if self.stop_flag.is_set():
-                    pygame.mixer.music.stop()
+                    if self._mixer_ready():
+                        pygame.mixer.music.stop()
                     debug_print("Playback stopped by user/system.")
                     break
                 time.sleep(0.1) # Check for stop signal periodically
@@ -122,7 +137,7 @@ class VoiceOutput:
                     self.audio_queue.task_done()
 
     def speak(self, text: str):
-        if not VOICE_SETTINGS.get("enabled", False) or not self.client or not pygame.mixer.get_init():
+        if not VOICE_SETTINGS.get("enabled", False) or not self.client or not self._mixer_ready():
             debug_print("Voice output is disabled, OpenAI client not configured, or pygame mixer not ready.")
             return
         
@@ -134,7 +149,7 @@ class VoiceOutput:
     def stop_speaking(self):
         debug_print("Stop speaking called.")
         self.stop_flag.set() # Signal the playback loop to stop
-        if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+        if self._mixer_ready() and pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
             debug_print("Pygame music explicitly stopped.")
         # Clearing the queue might be an option if desired, but could lose queued speech.
@@ -145,7 +160,7 @@ class VoiceOutput:
         if self.worker_thread and self.worker_thread.is_alive():
             self.audio_queue.put(None)  # Signal worker to exit
             self.worker_thread.join(timeout=2) # Wait for worker to finish
-        if pygame.mixer.get_init():
+        if self._mixer_ready():
             pygame.mixer.quit()
             debug_print("Pygame mixer quit.")
 
@@ -172,7 +187,7 @@ if __name__ == '__main__':
     # Critical: Re-check if the global voice_output is usable after settings change, 
     # especially if its __init__ depends on settings that might have changed.
     # As __init__ gets client and inits pygame, it should be okay for settings to change before speak().
-    if not voice_output.client or not (hasattr(pygame.mixer, 'get_init') and pygame.mixer.get_init()):
+    if not voice_output.client or not voice_output._mixer_ready():
         debug_print("Global voice_output client or pygame mixer not ready. Attempting re-initialization for test.")
         if hasattr(voice_output, 'shutdown') and callable(voice_output.shutdown):
             voice_output.shutdown() # Shutdown existing global instance
@@ -181,7 +196,7 @@ if __name__ == '__main__':
         SYSTEM_SETTINGS["debug_mode"] = True
 
     # Final check before running test commands
-    if not voice_output.client or not (hasattr(pygame.mixer, 'get_init') and pygame.mixer.get_init()):
+    if not voice_output.client or not voice_output._mixer_ready():
         print("Cannot run test: VoiceOutput still not properly initialized after attempting re-init.")
         sys.exit(1)
 
@@ -193,7 +208,11 @@ if __name__ == '__main__':
     voice_output.speak("This is a longer test sentence, check if it plays correctly and can be interrupted.")
 
     try:
-        while voice_output.audio_queue.unfinished_tasks > 0 or (hasattr(pygame.mixer, 'music') and pygame.mixer.music.get_busy()) or voice_output.speaking_flag.is_set():
+        while (
+            voice_output.audio_queue.unfinished_tasks > 0
+            or (voice_output._mixer_ready() and pygame.mixer.music.get_busy())
+            or voice_output.speaking_flag.is_set()
+        ):
             if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
                 line = sys.stdin.readline().lower()
                 if 'stop' in line:
