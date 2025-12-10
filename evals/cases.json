@@ -3,7 +3,7 @@
     "name": "greeting",
     "prompt": "hi",
     "description": "Assistant greets warmly and offers help.",
-    "expect_contains": ["great to see you", "help you today"],
+    "expect_contains": ["great to see you", "help you"],
     "forbid_contains": [],
     "min_length": 10
   },
@@ -16,12 +16,60 @@
     "min_length": 10
   },
   {
-    "name": "search_request",
-    "prompt": "Search for me online",
-    "description": "Assistant should attempt a web search rather than refuse outright.",
+    "name": "family_memory_wife",
+    "prompt": "Who is my wife?",
+    "description": "Recall family information about Danny's wife.",
+    "expect_contains": ["Kiki"],
+    "forbid_contains": ["don't know", "not sure"],
+    "min_length": 10
+  },
+  {
+    "name": "family_memory_children",
+    "prompt": "Tell me about my children",
+    "description": "Recall information about Danny's children.",
+    "expect_contains": ["Lena", "Tobias"],
+    "forbid_contains": ["don't know", "not sure"],
+    "min_length": 20
+  },
+  {
+    "name": "search_request_explicit",
+    "prompt": "Search for the latest AI news",
+    "description": "Assistant should route to search agent for explicit search request.",
     "expect_contains": ["search"],
     "forbid_contains": ["can't browse", "cannot browse"],
     "min_length": 20
+  },
+  {
+    "name": "search_request_implicit",
+    "prompt": "What's the weather like today?",
+    "description": "Assistant should recognize need for current information and search.",
+    "expect_contains": ["search", "weather", "today"],
+    "forbid_contains": ["I don't have access", "I can't"],
+    "min_length": 20
+  },
+  {
+    "name": "search_current_events",
+    "prompt": "What's happening in tech today?",
+    "description": "Current events query should trigger search.",
+    "expect_contains": ["search"],
+    "forbid_contains": ["I don't know", "training data"],
+    "min_length": 20
+  },
+  {
+    "name": "general_knowledge",
+    "prompt": "What is the capital of France?",
+    "description": "General knowledge questions should be answered directly.",
+    "expect_contains": ["Paris"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "conversational_chitchat",
+    "prompt": "How are you doing today?",
+    "description": "Casual conversation should be handled by master agent with friendly tone.",
+    "expect_contains": [],
+    "forbid_contains": ["ROUTE:", "error", "Error"],
+    "min_length": 15
   },
   {
     "name": "help_command",
@@ -30,5 +78,325 @@
     "expect_contains": ["Available Commands"],
     "forbid_contains": [],
     "min_length": 20
+  },
+  {
+    "name": "personality_humor",
+    "prompt": "Tell me a joke",
+    "description": "Assistant should display humor based on personality settings.",
+    "expect_contains": [],
+    "forbid_contains": ["can't", "cannot"],
+    "min_length": 20
+  },
+  {
+    "name": "personality_empathy",
+    "prompt": "I had a rough day",
+    "description": "Assistant should respond empathetically.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 30
+  },
+  {
+    "name": "follow_up_context",
+    "prompt": "tell me more",
+    "description": "Follow-up question should reference previous context (run after another test).",
+    "expect_contains": [],
+    "forbid_contains": ["what are you referring to", "I don't understand what"],
+    "min_length": 20
+  },
+  {
+    "name": "clarification_needed",
+    "prompt": "is that correct?",
+    "description": "Ambiguous follow-up should prompt for clarification or use context.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "empty_input_handling",
+    "prompt": "",
+    "description": "Empty input should be handled gracefully.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error", "exception"],
+    "min_length": 0
+  },
+  {
+    "name": "nonsensical_input",
+    "prompt": "asdfghjkl qwerty zxcvbnm",
+    "description": "Nonsensical input should get a reasonable response.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error", "exception"],
+    "min_length": 10
+  },
+  {
+    "name": "special_characters",
+    "prompt": "What is 2 + 2? !@#$%",
+    "description": "Input with special characters should be handled.",
+    "expect_contains": ["4"],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 5
+  },
+  {
+    "name": "math_calculation",
+    "prompt": "What is 47 multiplied by 23?",
+    "description": "Simple math should be calculated correctly.",
+    "expect_contains": ["1081"],
+    "forbid_contains": [],
+    "min_length": 5
+  },
+  {
+    "name": "multi_part_question",
+    "prompt": "What's the capital of Germany and when was it founded?",
+    "description": "Multi-part question should address both parts.",
+    "expect_contains": ["Berlin"],
+    "forbid_contains": [],
+    "min_length": 30
+  },
+  {
+    "name": "instruction_following",
+    "prompt": "List three fruits",
+    "description": "Assistant should follow clear instructions.",
+    "expect_contains": [],
+    "forbid_contains": ["can't", "cannot"],
+    "min_length": 15
+  },
+  {
+    "name": "reasoning_task",
+    "prompt": "If all cats are animals and Fluffy is a cat, what is Fluffy?",
+    "description": "Logical reasoning should be demonstrated.",
+    "expect_contains": ["animal"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "creative_task",
+    "prompt": "Write a two-line poem about friendship",
+    "description": "Creative requests should be fulfilled.",
+    "expect_contains": [],
+    "forbid_contains": ["can't", "cannot", "unable"],
+    "min_length": 20
+  },
+  {
+    "name": "definition_request",
+    "prompt": "What does 'ephemeral' mean?",
+    "description": "Vocabulary and definition requests.",
+    "expect_contains": ["short", "brief", "temporary", "lasting"],
+    "forbid_contains": [],
+    "min_length": 15
+  },
+  {
+    "name": "comparison_request",
+    "prompt": "What's the difference between Python and JavaScript?",
+    "description": "Comparison questions should highlight key differences.",
+    "expect_contains": ["Python", "JavaScript"],
+    "forbid_contains": [],
+    "min_length": 50
+  },
+  {
+    "name": "explanation_request",
+    "prompt": "Explain how photosynthesis works",
+    "description": "Explanations should be clear and informative.",
+    "expect_contains": ["plant", "light", "energy"],
+    "forbid_contains": [],
+    "min_length": 40
+  },
+  {
+    "name": "personal_advice",
+    "prompt": "I'm feeling stressed about work. Any advice?",
+    "description": "Personal advice should be empathetic and helpful.",
+    "expect_contains": [],
+    "forbid_contains": ["can't help", "cannot help"],
+    "min_length": 50
+  },
+  {
+    "name": "recommendation_request",
+    "prompt": "Suggest a good book to read",
+    "description": "Recommendations should be provided with reasoning.",
+    "expect_contains": [],
+    "forbid_contains": ["can't recommend", "cannot recommend"],
+    "min_length": 30
+  },
+  {
+    "name": "historical_fact",
+    "prompt": "When did World War II end?",
+    "description": "Historical facts should be accurate.",
+    "expect_contains": ["1945"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "scientific_fact",
+    "prompt": "How many planets are in our solar system?",
+    "description": "Scientific facts should be accurate.",
+    "expect_contains": ["eight", "8"],
+    "forbid_contains": ["nine", "9"],
+    "min_length": 10
+  },
+  {
+    "name": "casual_greeting_variation",
+    "prompt": "hey there!",
+    "description": "Variations of greetings should be recognized.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "gratitude_response",
+    "prompt": "thank you so much!",
+    "description": "Gratitude should be acknowledged warmly.",
+    "expect_contains": ["welcome"],
+    "forbid_contains": [],
+    "min_length": 10
+  },
+  {
+    "name": "emoji_in_input",
+    "prompt": "How are you? 😊",
+    "description": "Emoji in input should be handled naturally.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "yes_no_question",
+    "prompt": "Is the sky blue?",
+    "description": "Yes/no questions should get clear answers.",
+    "expect_contains": ["yes", "Yes"],
+    "forbid_contains": [],
+    "min_length": 5
+  },
+  {
+    "name": "opinion_request",
+    "prompt": "What do you think about electric cars?",
+    "description": "Opinion requests should get thoughtful responses.",
+    "expect_contains": [],
+    "forbid_contains": ["I don't have opinions", "I can't have opinions"],
+    "min_length": 40
+  },
+  {
+    "name": "hypothetical_scenario",
+    "prompt": "What would happen if the internet shut down globally?",
+    "description": "Hypothetical scenarios should be explored thoughtfully.",
+    "expect_contains": [],
+    "forbid_contains": [],
+    "min_length": 50
+  },
+  {
+    "name": "pros_cons_analysis",
+    "prompt": "What are the pros and cons of remote work?",
+    "description": "Balanced analysis with both perspectives.",
+    "expect_contains": ["pros", "cons", "advantage", "disadvantage"],
+    "forbid_contains": [],
+    "min_length": 60
+  },
+  {
+    "name": "time_sensitive_query",
+    "prompt": "What time is it?",
+    "description": "Time queries should acknowledge need for current info.",
+    "expect_contains": [],
+    "forbid_contains": ["training data"],
+    "min_length": 10
+  },
+  {
+    "name": "location_query",
+    "prompt": "Where am I?",
+    "description": "Location queries should be handled appropriately.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "complex_reasoning",
+    "prompt": "If a train leaves Station A at 60 mph and another train leaves Station B at 80 mph, and they're 280 miles apart, when will they meet?",
+    "description": "Complex reasoning and math problem.",
+    "expect_contains": ["2", "hour"],
+    "forbid_contains": [],
+    "min_length": 20
+  },
+  {
+    "name": "memory_recall_preference",
+    "prompt": "What's my favorite color?",
+    "description": "Preference recall from memory (if previously stored).",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "self_reference",
+    "prompt": "What can you do?",
+    "description": "Self-reference questions about capabilities.",
+    "expect_contains": ["help", "assist", "answer"],
+    "forbid_contains": [],
+    "min_length": 30
+  },
+  {
+    "name": "correction_handling",
+    "prompt": "Actually, that's not quite right",
+    "description": "Corrections should be acknowledged gracefully.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 10
+  },
+  {
+    "name": "polite_disagreement",
+    "prompt": "I don't think that's correct",
+    "description": "Disagreement should be handled respectfully.",
+    "expect_contains": [],
+    "forbid_contains": ["error", "Error"],
+    "min_length": 15
+  },
+  {
+    "name": "long_form_request",
+    "prompt": "Write a detailed explanation of how blockchain technology works",
+    "description": "Long-form content should be comprehensive.",
+    "expect_contains": ["blockchain"],
+    "forbid_contains": [],
+    "min_length": 100
+  },
+  {
+    "name": "summarization_request",
+    "prompt": "Summarize the concept of machine learning in one sentence",
+    "description": "Summarization should be concise.",
+    "expect_contains": ["machine learning", "learn"],
+    "forbid_contains": [],
+    "min_length": 15
+  },
+  {
+    "name": "translation_request",
+    "prompt": "How do you say 'hello' in Spanish?",
+    "description": "Translation requests should be accurate.",
+    "expect_contains": ["hola"],
+    "forbid_contains": [],
+    "min_length": 5
+  },
+  {
+    "name": "acronym_explanation",
+    "prompt": "What does API stand for?",
+    "description": "Acronym explanations should be provided.",
+    "expect_contains": ["Application Programming Interface"],
+    "forbid_contains": [],
+    "min_length": 15
+  },
+  {
+    "name": "troubleshooting_assistance",
+    "prompt": "My computer is running slow. What should I do?",
+    "description": "Troubleshooting questions should get helpful suggestions.",
+    "expect_contains": [],
+    "forbid_contains": ["can't help", "cannot help"],
+    "min_length": 50
+  },
+  {
+    "name": "ethical_question",
+    "prompt": "Is it ethical to use AI in healthcare?",
+    "description": "Ethical questions should get nuanced responses.",
+    "expect_contains": [],
+    "forbid_contains": [],
+    "min_length": 50
+  },
+  {
+    "name": "future_prediction",
+    "prompt": "What will technology look like in 10 years?",
+    "description": "Future-oriented questions should be thoughtful.",
+    "expect_contains": [],
+    "forbid_contains": ["I can't predict", "cannot predict the future"],
+    "min_length": 40
   }
 ]

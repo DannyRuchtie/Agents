@@ -53,6 +53,7 @@ build/
 *.tmp
 /models
 whereami_tool/
+external/whisper_cpp/
 
 # ChromaDB
 chroma.sqlite3

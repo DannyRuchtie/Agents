@@ -173,6 +173,31 @@ You'll see a welcome message and a `You:` prompt. The assistant will automatical
     -   You can toggle it using commands like `voice on` / `voice off` (if implemented and recognized in `main.py`).
     -   The default TTS provider is OpenAI. Voice preferences (e.g., OpenAI voice model like "alloy", "nova") are set in `config/settings.py` under `VOICE_SETTINGS`.
 
+### 🎤 Local Whisper Voice Chat
+
+Prefer to keep speech-to-text on-device? A ready-made Whisper.cpp integration is included:
+
+1. Build the bundled `whisper.cpp` checkout once (already part of this repo):
+   ```bash
+   cd external/whisper_cpp
+   cmake -B build -DWHISPER_SDL2=ON
+   cmake --build build --config Release
+   ./models/download-ggml-model.sh large-v3  # ~3 GB, or choose a smaller model
+   ```
+2. Launch the realtime microphone loop that feeds transcripts into your existing agents and speaks replies using the built-in OpenAI TTS:
+   ```bash
+   python3 scripts/whisper_voice_chat.py
+   ```
+   - Detected speech is routed through `MasterAgent`, so all of your specialist agents remain available.
+   - Responses stream back through the standard `voice_output` module, matching the behaviour from `main.py`.
+   - Say “exit” (or press `Ctrl+C`) to end the session.
+3. To experiment with Whisper directly without the agent pipeline:
+   ```bash
+   ./scripts/run_whisper_stream.sh          # defaults to ggml-large-v3.bin when present
+   WHISPER_MODEL_PATH=/path/to/model ./scripts/run_whisper_stream.sh --step 0
+   ```
+   Use the `WHISPER_MODEL_PATH` environment variable to point at a different `.bin` model if desired.
+
 ## 🧪 Evaluations
 
 Quickly validate the core agent flows (memory recall, search routing, and help command) with the bundled evaluation harness:
